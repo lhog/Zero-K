@@ -123,6 +123,14 @@ local moveDefs = {
 		depthmodparams = common_depthmodparams,
 	},
 
+	ATKBOT1 = {		--amphib + allterrain
+		footprintx = 1,
+		footprintz = 1,
+		maxwaterdepth = 5000,
+		maxslope = 70,
+		crushstrength = 5,
+	},	
+
 	ATKBOT3 = {		--amphib + allterrain
 		footprintx = 3,
 		footprintz = 3,
