@@ -4,7 +4,7 @@ unitDef = {
   description            = [[Feature attachment]],
   acceleration           = 0.000000001,
   brakeRate              = 0.000000001,
-  buildCostMetal         = 0,
+  buildCostMetal         = 100000000,
   buildPic               = [[levelterra.png]],
   canAttack              = false,
   canGuard               = false,
@@ -21,7 +21,7 @@ unitDef = {
   idleAutoHeal           = 0,
   idleTime               = 1800,
   
-  maxDamage              = 1,
+  maxDamage              = 100000000,
   maxSlope               = 36,
   maxVelocity            = 2.5,
   maxWaterDepth          = 5000,

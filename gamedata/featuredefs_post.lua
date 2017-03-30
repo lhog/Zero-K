@@ -139,6 +139,8 @@ local function ProcessUnitDef(udName, ud)
       fd.customparams = fd.customparams or {}
       fd.customparams.fromunit = "1"
       fd.damage = fd.customparams.health_override or ud.maxdamage
+	  fd.mass = (((fd.metal/2) + (fd.damage/8))^0.6)*6.5
+	  fd.crushresistance = 0.4 * fd.metal + 0.1 * fd.damage --engine default way of calculating mass of feature (eq to crushresistance)
       fd.energy = 0
       fd.reclaimable = true
       fd.reclaimtime = fd.metal
