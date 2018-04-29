@@ -1,7 +1,7 @@
 -- $Id: figures.lua 3171 2008-11-06 09:06:29Z det $
 -------------------------------------------------------------------------------
--- Desc: Create a sphere centered at cy, cx, cz with radius r, and 
---       precision p. Based on a function Written by Paul Bourke. 
+-- Desc: Create a sphere centered at cy, cx, cz with radius r, and
+--       precision p. Based on a function Written by Paul Bourke.
 --       http://astronomy.swin.edu.au/~pbourke/opengl/sphere/
 -------------------------------------------------------------------------------
 
@@ -19,6 +19,143 @@ local glVertex   = gl.Vertex
 local sin = math.sin
 local cos = math.cos
 
+function DrawPolyhedron(p)
+	if (p == nil) then p = 1 end
+
+	local X = 0.525731112119133606
+	local Z = 0.850650808352039932
+
+	local vertexes0 = {
+		{-X, 0.0, Z}, {X, 0.0, Z}, {-X, 0.0, -Z}, {X, 0.0, -Z},
+		{0.0, Z, X}, {0.0, Z, -X}, {0.0, -Z, X}, {0.0, -Z, -X},
+		{Z, X, 0.0}, {-Z, X, 0.0}, {Z, -X, 0.0}, {-Z, -X, 0.0},
+	}
+
+	local fi0 = {
+		{1,5,2}, {1,10,5}, {10,6,5}, {5,6,9}, {5,9,2},
+		{9,11,2}, {9,4,11}, {6,4,9}, {6,3,4}, {3,8,4},
+		{8,11,4}, {8,7,11}, {8,12,7}, {12,1,7}, {1,2,7},
+		{7,2,11}, {10,1,12}, {10,12,3}, {10,3,6}, {8,3,12}
+	}
+
+
+	local function normalize(vertex)
+		r = math.sqrt(vertex[1]*vertex[1] + vertex[2]*vertex[2] + vertex[3]*vertex[3])
+		vertex[1], vertex[2], vertex[3] = vertex[1] / r, vertex[2] / r, vertex[3] / r
+		return vertex
+	end
+
+	local function midpoint(pt1, pt2)
+		return { (pt1[1] + pt2[1]) / 2, (pt1[2] + pt2[2]) / 2, (pt1[3] + pt2[3]) / 2}
+	end
+
+	local function dist3D2(pt1, pt2)
+		return (pt1[1] - pt2[1])^2 + (pt1[2] - pt2[2])^2 + (pt1[3] - pt2[3])^2
+	end
+
+	--[[
+	for i = 1, #vertexes0 do
+		vertexes0[i] = normalize(vertexes0[i])
+	end
+	]]--
+
+	--[[
+	--CCW
+	local fi0 = {
+			[1]={1, 2, 5},
+			[2]={2, 10, 5},
+			[3]={5, 10, 6},
+			[4]={6, 10, 4},
+			[5]={3, 4, 8},
+			[6]={4, 3, 6},
+			[7]={8, 11, 3},
+			[8]={1, 9, 11},
+			[9]={1, 5, 9},
+			[10]={9, 3, 11},
+			[11]={9, 5, 6},
+			[12]={9, 6, 3},
+			[13]={2, 1, 7},
+			[14]={12, 2, 7},
+			[15]={4, 10, 12},
+			[16]={7, 11, 8},
+			[17]={4, 12, 8},
+			[18]={12, 7, 8},
+			[19]={7, 1, 11},
+			[20]={10, 2, 12},
+
+	}
+	]]--
+
+	--CW
+	--[[
+	for i = 1, #fi0 do
+		fi0[i][2], fi0[i][3] = fi0[i][3], fi0[i][2]
+	end
+	]]--
+
+	local faces0 = {}
+	for i = 1, #fi0 do
+		faces0[i] = {vertexes0[fi0[i][1]], vertexes0[fi0[i][2]], vertexes0[fi0[i][3]]}
+	end
+
+	local function subdivide(pt1, pt2, pt3)
+		pt12 = normalize(midpoint(pt1, pt2))
+		pt13 = normalize(midpoint(pt1, pt3))
+		pt23 = normalize(midpoint(pt2, pt3))
+
+		-- CCW order, starting from leftmost
+		--[[
+		return {
+			{pt12, pt13, pt1},
+			{pt2, pt23, pt12},
+			{pt12, pt23, pt13},
+			{pt23, pt3, pt13},
+		}
+		]]--
+		-- CCW order, starting from leftmost
+		return {
+			{pt12, pt13, pt1},
+			{pt2, pt23, pt12},
+			{pt12, pt23, pt13},
+			{pt23, pt3, pt13},
+		}
+
+
+	end
+
+
+	local faces = faces0
+
+	for subd = 2, p do
+		newfaces = {}
+		for fii = 1, #faces do
+			local newsub = subdivide(faces[fii][1], faces[fii][2], faces[fii][3])
+			for _, tri in ipairs(newsub) do
+				table.insert(newfaces, tri)
+			end
+		end
+		faces = newfaces
+	end
+
+	Spring.Echo("faces ico", #faces)
+
+	glBeginEnd(GL.TRIANGLES , function()
+		for _, face in ipairs(faces) do
+			gl.Normal(face[1][1], face[1][2], face[1][3])
+			gl.MultiTexCoord(1, 1, 0, 0)
+			gl.Vertex(face[1][1], face[1][2], face[1][3])
+			
+			gl.MultiTexCoord(1, 0, 1, 0)
+			gl.Normal(face[2][1], face[2][2], face[2][3])
+			gl.Vertex(face[2][1], face[2][2], face[2][3])			
+
+			gl.MultiTexCoord(1, 0, 0, 1)
+			gl.Normal(face[3][1], face[3][2], face[3][3])
+			gl.Vertex(face[3][1], face[3][2], face[3][3])			
+		end
+	end)
+end
+
 function DrawSphere( cx, cy, cz, r, p )
 		local theta1,theta2,theta3 = 0,0,0;
 		local ex,ey,ez = 0,0,0;
@@ -29,6 +166,8 @@ function DrawSphere( cx, cy, cz, r, p )
 
 		--// Disallow a negative number for precision.
 		if ( p < 0 ) then p = -p; end
+
+		local cnt = 0
 
 		for i = 0,p*0.5-1 do
 				theta1 = i * TWOPI / p - PIDIV2;
@@ -59,9 +198,11 @@ function DrawSphere( cx, cy, cz, r, p )
 								glNormal( ex, ey, ez );
 								glTexCoord( -(j/p), 2*i/p );
 								glVertex( px, py, pz );
+								cnt = cnt + 1
 						end
 				end)
 		end
+		Spring.Echo("Sphere", cnt)
 end
 
 

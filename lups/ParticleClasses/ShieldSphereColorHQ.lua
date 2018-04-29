@@ -185,6 +185,8 @@ function ShieldSphereColorHQParticle:Initialize()
 
 		varying vec3 normal;
 
+		varying vec3 vBC;
+
 		#define DRIFT_FREQ 25.0
 
 		#define PI 3.141592653589793
@@ -193,7 +195,8 @@ function ShieldSphereColorHQParticle:Initialize()
 
 		void main()
 		{
-			gl_TexCoord[0] = gl_MultiTexCoord0;
+			//gl_TexCoord[0] = gl_MultiTexCoord0;
+			vBC = gl_MultiTexCoord1;
 
 			float r = length(gl_Vertex.xyz);
 			float theta = acos(gl_Vertex.z / r);
@@ -207,7 +210,8 @@ function ShieldSphereColorHQParticle:Initialize()
 			vec4 size4 = vec4(size, size, size, 1.0f);
 			gl_Position = gl_ModelViewProjectionMatrix * (myVertex * size4 + pos);
 
-			normal = normalize(gl_NormalMatrix * gl_Normal);
+			normal = normalize(gl_NormalMatrix * gl_Vertex.xyz);
+			//normal = normalize(gl_NormalMatrix * gl_Normal);
 
 			vec3 vertex = vec3(gl_ModelViewMatrix * gl_Vertex);
 			float angle = dot(normal, vertex) * inversesqrt( dot(normal, normal) * dot(vertex, vertex) ); //dot(norm(n), norm(v))
@@ -217,6 +221,7 @@ function ShieldSphereColorHQParticle:Initialize()
 		fragment = [[
 		varying float opac;
 		varying vec3 normal;
+		varying vec3 vBC;
 
 		uniform float timer;
 
@@ -255,6 +260,12 @@ function ShieldSphereColorHQParticle:Initialize()
 			return smoothstep(coreSize, width, val);
 		}
 
+		float edges(vec3 vBC, float width, float coreSize)
+		{
+			float val = min(vBC.x ,min(vBC.y, vBC.z));
+			return smoothstep(coreSize, width, val);
+		}
+
 		vec2 GetRippleLinearFallOffCoord(vec2 uv, vec2 point, float mag, float waveFreq, float waveSpeed, float waveDist, float time)
 		{
 			vec2 dir = uv - point;
@@ -285,7 +296,7 @@ function ShieldSphereColorHQParticle:Initialize()
 		void main(void)
 		{
 			vec2 uvMulS = vec2(1.0, 0.5) * uvMul;
-			vec2 uv = RadialCoords(normal) * uvMulS;
+			vec2 uv = RadialCoords(normal) * uvMulS;			
 
 			vec2 offset = vec2(0.0);
 
@@ -308,7 +319,8 @@ function ShieldSphereColorHQParticle:Initialize()
 
 			vec4 texel;
 			if (method == 0)
-				texel = vec4(1.0 - hex((uv + offset + offset2)*HEXSCALE, 0.2, 0.01));
+				//texel = vec4(1.0 - hex((uv + offset + offset2)*HEXSCALE, 0.2, 0.01));
+				texel = vec4(1.0 - edges(vBC, 0.1, 0.01));
 			else if (method == 1)
 				texel = texture2D(tex0, uv + offset + offset2);
 			else
@@ -325,6 +337,14 @@ function ShieldSphereColorHQParticle:Initialize()
 			gl_FragColor = mix(color1TexM, color2M, opac);
 			//gl_FragColor = mix(color1Tex, color2M, opac);
 			//gl_FragColor = texel;
+			/*
+			if (any(lessThan(vBC, vec3(0.01)))) {
+				gl_FragColor = vec4(1.0, 0.0, 0.0, 0.5);
+			}
+			else {
+				gl_FragColor = vec4(0.0, 0.0, 1.0, 0.5);
+			}
+			*/
 		}
 	]],
 		uniformInt = {
@@ -360,7 +380,8 @@ function ShieldSphereColorHQParticle:Initialize()
 	hitPointsUniform = gl.GetUniformLocation(shieldShader, 'hitPoints')
 
 	sphereList = {
-		large = gl.CreateList(DrawSphere, 0, 0, 0, 1, 60),
+		--large = gl.CreateList(DrawSphere, 0, 0, 0, 1, 60),
+		large = gl.CreateList(DrawPolyhedron),
 		medium = gl.CreateList(DrawSphere, 0, 0, 0, 1, 50),
 		small = gl.CreateList(DrawSphere, 0, 0, 0, 1, 40),
 	}
