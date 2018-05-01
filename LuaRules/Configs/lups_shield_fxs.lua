@@ -6,10 +6,11 @@ local ShieldSphereBase = {
 	colormap1 = {{0.1, 0.1, 1, 0.22}, {1, 0.1, 0.1, 0.22}},
 	colormap2 = {{0.2, 1, 0.7, 0.0}, {0.7, 1, 0.2, 0.0}},
 --	drawBack = 0.7,
-	mix = {0.0, 0.0, 0.0, 0.25},
+	mix = {0.0, 0.0, 0.0, 0.3},
 	drawBackHQ = {1.0, 1.0, 1.0, 0.45},
 	repeatEffect = true,
 	onActive = true,
+	texture = "bitmaps/PD/shield3mist.png"
 }
 
 local SEARCH_SMALL = {

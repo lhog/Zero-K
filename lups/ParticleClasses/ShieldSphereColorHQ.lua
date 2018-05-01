@@ -161,7 +161,7 @@ function ShieldSphereColorHQParticle:Draw()
 			gl.Uniform(marginUniform, self.drawBackMargin)
 		end
 
-		glCallList(sphereList[self.shieldSize])
+		--glCallList(sphereList[self.shieldSize])
 	end
 end
 
@@ -199,7 +199,7 @@ function ShieldSphereColorHQParticle:Initialize()
 			float theta = acos(gl_Vertex.z / r);
 			float phi = atan(gl_Vertex.y, gl_Vertex.x);
 
-			r += sizeDrift * r * nsin(theta + phi + timer * DRIFT_FREQ);
+			r += 0 * r * nsin(theta + phi + timer * 0);
 
 			vec4 myVertex;
 			myVertex = vec4(r * sin(theta) * cos(phi), r * sin(theta) * sin(phi), r * cos(theta), 1.0f);
@@ -282,51 +282,89 @@ function ShieldSphereColorHQParticle:Initialize()
 			return vec2(sphereCoords.x * 0.5 + 0.5, 1.0 - sphereCoords.y);
 		}
 
-		void main(void)
-		{
-			vec2 uvMulS = vec2(1.0, 0.5) * uvMul;
-			vec2 uv = RadialCoords(normal) * uvMulS;
 
-			vec2 offset = vec2(0.0);
+		float rand(float n){
+			return fract(sin(n) * 43758.5453123);
+		}
 
-			offset += GetRippleCoord(uv, vec2(0.75, 0.5) * uvMulS, sizeDrift * SZDRIFTTOUV, 80.0, 15.0, timer);
-			//offset += GetRippleCoord(uv, vec2(0.5, 0.5) * uvMulS, 0.01, 80.0, 15.0, timer);
-			//offset += GetRippleCoord(uv, vec2(1.0, 0.5) * uvMulS, 0.01, 80.0, 15.0, timer);
+		float rand(vec2 n) { 
+			return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453);
+		}
 
-			vec2 offset2 = vec2(0.0);
+		float noise(float p){
+			float fl = floor(p);
+			float fc = fract(p);
+			return mix(rand(fl), rand(fl + 1.0), fc);
+		}
+			
+		float noise(vec2 n) {
+			const vec2 d = vec2(0.0, 1.0);
+			vec2 b = floor(n), f = smoothstep(vec2(0.0), vec2(1.0), fract(n));
+			return mix(mix(rand(b), rand(b + d.yx), f.x), mix(rand(b + d.xy), rand(b + d.yy), f.x), f.y);
+		}
 
-			for (int hitPointIdx = 0; hitPointIdx < MAX_POINTS; ++hitPointIdx) {
-				if (hitPointIdx < hitPointCount) {
-					vec3 impactPoint = vec3(hitPoints[5 * hitPointIdx + 0], hitPoints[5 * hitPointIdx + 1], hitPoints[5 * hitPointIdx + 2]);
-					vec3 impactPointAdj = (vec4(impactPoint, 1.0) * viewMatrixI).xyz;
-					vec2 impactPointUV = RadialCoords(impactPointAdj) * uvMulS;
-					float mag = hitPoints[5 * hitPointIdx + 3];
-					float aoe = hitPoints[5 * hitPointIdx + 4];
-					offset2 += GetRippleLinearFallOffCoord(uv, impactPointUV, mag, 100.0, -120.0, aoe, timer);
+		#define VOROPACE 5.0
+
+		vec3 voronoi( in vec2 x ) {
+			vec2 n = floor(x);
+			vec2 f = fract(x);
+
+			// first pass: regular voronoi
+			vec2 mg, mr;
+			float md = 8.0;
+			for (int j= -1; j <= 1; j++) {
+				for (int i= -1; i <= 1; i++) {
+					vec2 g = vec2(float(i),float(j));
+					vec2 o = rand( n + g );
+					o = 0.5 + 0.5*sin( timer*VOROPACE + 6.2831*o );
+
+					vec2 r = g + o - f;
+					float d = dot(r,r);
+
+					if( d<md ) {
+						md = d;
+						mr = r;
+						mg = g;
+					}
 				}
 			}
 
-			vec2 uvo = uv + offset + offset2; //this is to trick GLSL compiler, otherwise shot-induced ripple is not drawn. Silly....
+			// second pass: distance to borders
+			md = 8.0;
+			for (int j= -2; j <= 2; j++) {
+				for (int i= -2; i <= 2; i++) {
+					vec2 g = mg + vec2(float(i),float(j));
+					vec2 o = rand( n + g );
+					o = 0.5 + 0.5*sin( timer*VOROPACE + 6.2831*o );
 
-			vec4 texel;
-			if (method == 0)
-				texel = vec4(1.0 - hex(uvo * HEXSCALE, 0.2, 0.01));
-			else if (method == 1)
-				texel = texture2D(tex0, uvo);
-			else
-				texel = vec4(0.0);
+					vec2 r = g + o - f;
 
-			vec4 colorMultAdj = colorMult * (1.0 + length(offset2) * 50.0);
-			//float colorMultAdj = colorMult;
-			//vec4 color1M = color1 * colorMultAdj;
-			vec4 color2M = color2 * colorMultAdj;
+					if ( dot(mr-r,mr-r)>0.00001 ) {
+						md = min(md, dot( 0.5*(mr+r), normalize(r-mr) ));
+					}
+				}
+			}
+			return vec3(md, mr);
+		}
+
+		void main(void)
+		{
+			vec3 n = normalize(normal);
+			vec2 uv = RadialCoords(n) * (1.0, 0.5);
+			// Scale
+			uv *= 50.;
+			vec3 c = voronoi(uv);
+			
+			vec4 texel = vec4(0.0);
+			texel = mix( vec4(1.0), texel, smoothstep( 0.01, 0.1, c.x ) );
 
 			vec4 color1Tex = mix(color1, texel, colorMix);
+			float colorMultAdj = colorMult;
+			vec4 color2M = color2 * colorMultAdj;
 			vec4 color1TexM = color1Tex * colorMultAdj;
 
 			gl_FragColor = mix(color1TexM, color2M, opac);
-			//gl_FragColor = mix(color1Tex, color2M, opac);
-			//gl_FragColor = texel;
+			
 		}
 	]],
 		uniformInt = {
