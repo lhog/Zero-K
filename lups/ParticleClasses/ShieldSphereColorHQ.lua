@@ -199,19 +199,20 @@ function ShieldSphereColorHQParticle:Initialize()
 			float theta = acos(gl_Vertex.z / r);
 			float phi = atan(gl_Vertex.y, gl_Vertex.x);
 
-			r += 0 * r * nsin(theta + phi + timer * 0);
+			r += 0.0 * r * nsin(theta + phi + timer * 0.0);
 
 			vec4 myVertex;
 			myVertex = vec4(r * sin(theta) * cos(phi), r * sin(theta) * sin(phi), r * cos(theta), 1.0f);
 
 			vec4 size4 = vec4(size, size, size, 1.0f);
 			gl_Position = gl_ModelViewProjectionMatrix * (myVertex * size4 + pos);
-
-			normal = normalize(gl_NormalMatrix * gl_Normal);
+			
+			//normal = normalize(gl_NormalMatrix * gl_Normal);
+			normal = normalize(gl_Normal);
 
 			vec3 vertex = vec3(gl_ModelViewMatrix * gl_Vertex);
 			float angle = dot(normal, vertex) * inversesqrt( dot(normal, normal) * dot(vertex, vertex) ); //dot(norm(n), norm(v))
-			opac = pow( abs( angle ) , margin);
+			opac = pow( abs(angle), margin );
 		}
 		]],
 		fragment = [[
@@ -272,7 +273,6 @@ function ShieldSphereColorHQParticle:Initialize()
 			return offset;
 		}
 
-
 		vec2 RadialCoords(vec3 a_coords)
 		{
 			vec3 a_coords_n = normalize(a_coords);
@@ -282,22 +282,47 @@ function ShieldSphereColorHQParticle:Initialize()
 			return vec2(sphereCoords.x * 0.5 + 0.5, 1.0 - sphereCoords.y);
 		}
 
-
-		float rand(float n){
-			return fract(sin(n) * 43758.5453123);
+		float rand(float p)
+		{
+			return fract(sin(p) * 43758.5453123);
 		}
 
-		float rand(vec2 n) { 
-			return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453);
+		float rand(vec2 p)
+		{
+			return fract(sin(dot(p, vec2(12.9898, 4.1414))) * 43758.5453);
 		}
 
-		float noise(float p){
+		vec3 rand3(vec3 p)
+		{
+			vec3 q = vec3(
+				dot(p, vec3(127.1, 311.7, 74.7)),
+				dot(p, vec3(269.5, 183.3, 246.1)),
+				dot(p, vec3(113.5, 271.9, 124.6))
+				);
+
+			return fract(sin(q) * 43758.5453123);
+		}
+
+		vec3 rand3(vec2 p)
+		{
+			vec3 q = vec3(
+					dot(p, vec2(127.1, 311.7)),
+					dot(p, vec2(269.5, 183.3)),
+					dot(p, vec2(419.2, 371.9))
+					);
+
+			return fract(sin(q) * 43758.5453);
+		}
+
+		float noise(float p)
+		{
 			float fl = floor(p);
 			float fc = fract(p);
 			return mix(rand(fl), rand(fl + 1.0), fc);
 		}
-			
-		float noise(vec2 n) {
+
+		float noise(vec2 n)
+		{
 			const vec2 d = vec2(0.0, 1.0);
 			vec2 b = floor(n), f = smoothstep(vec2(0.0), vec2(1.0), fract(n));
 			return mix(mix(rand(b), rand(b + d.yx), f.x), mix(rand(b + d.xy), rand(b + d.yy), f.x), f.y);
@@ -305,7 +330,8 @@ function ShieldSphereColorHQParticle:Initialize()
 
 		#define VOROPACE 5.0
 
-		vec3 voronoi( in vec2 x ) {
+		vec3 voronoi(in vec2 x)
+		{
 			vec2 n = floor(x);
 			vec2 f = fract(x);
 
@@ -346,7 +372,50 @@ function ShieldSphereColorHQParticle:Initialize()
 			}
 			return vec3(md, mr);
 		}
+/*
+		vec3 voronoi(in vec3 x)
+		{
+			vec3 n = floor(x);
+			vec3 f = fract(x);
 
+			// first pass: regular voronoi
+			vec2 mg, mr;
+			float md = 8.0;
+			for (int j= -1; j <= 1; j++) {
+				for (int i= -1; i <= 1; i++) {
+					vec2 g = vec2(float(i),float(j));
+					vec2 o = rand( n + g );
+					o = 0.5 + 0.5*sin( timer*VOROPACE + 6.2831*o );
+
+					vec2 r = g + o - f;
+					float d = dot(r,r);
+
+					if( d<md ) {
+						md = d;
+						mr = r;
+						mg = g;
+					}
+				}
+			}
+
+			// second pass: distance to borders
+			md = 8.0;
+			for (int j= -2; j <= 2; j++) {
+				for (int i= -2; i <= 2; i++) {
+					vec2 g = mg + vec2(float(i),float(j));
+					vec2 o = rand( n + g );
+					o = 0.5 + 0.5*sin( timer*VOROPACE + 6.2831*o );
+
+					vec2 r = g + o - f;
+
+					if ( dot(mr-r,mr-r)>0.00001 ) {
+						md = min(md, dot( 0.5*(mr+r), normalize(r-mr) ));
+					}
+				}
+			}
+			return vec3(md, mr);
+		}
+*/
 		void main(void)
 		{
 			vec3 n = normalize(normal);
@@ -354,8 +423,10 @@ function ShieldSphereColorHQParticle:Initialize()
 			// Scale
 			uv *= 50.;
 			vec3 c = voronoi(uv);
-			
+			//c = voronoi(n).y;
+
 			vec4 texel = vec4(0.0);
+			texel += vec4(c.x*(0.5 + 0.5*sin(64.0*c.x))*vec3(1.0), 1.0);
 			texel = mix( vec4(1.0), texel, smoothstep( 0.01, 0.1, c.x ) );
 
 			vec4 color1Tex = mix(color1, texel, colorMix);
@@ -364,7 +435,6 @@ function ShieldSphereColorHQParticle:Initialize()
 			vec4 color1TexM = color1Tex * colorMultAdj;
 
 			gl_FragColor = mix(color1TexM, color2M, opac);
-			
 		}
 	]],
 		uniformInt = {
