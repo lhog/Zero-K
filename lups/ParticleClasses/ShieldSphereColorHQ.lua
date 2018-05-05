@@ -161,7 +161,7 @@ function ShieldSphereColorHQParticle:Draw()
 			gl.Uniform(marginUniform, self.drawBackMargin)
 		end
 
-		glCallList(sphereList[self.shieldSize])
+		--glCallList(sphereList[self.shieldSize])
 	end
 end
 
@@ -190,6 +190,11 @@ function ShieldSphereColorHQParticle:Initialize()
 		#define PI 3.141592653589793
 
 		#define nsin(x) (0.5 * sin(x) + 0.5)
+		
+		float rand(float p)
+		{
+			return fract(sin(p) * 43758.5453123);
+		}
 
 		void main()
 		{
@@ -199,7 +204,7 @@ function ShieldSphereColorHQParticle:Initialize()
 			float theta = acos(gl_Vertex.z / r);
 			float phi = atan(gl_Vertex.y, gl_Vertex.x);
 
-			r += sizeDrift * r * nsin(theta + phi + timer * DRIFT_FREQ);
+			r += sizeDrift * r * nsin(2*theta + 3*phi + timer * DRIFT_FREQ);
 
 			vec4 myVertex;
 			myVertex = vec4(r * sin(theta) * cos(phi), r * sin(theta) * sin(phi), r * cos(theta), 1.0f);
@@ -240,7 +245,7 @@ function ShieldSphereColorHQParticle:Initialize()
 
 		#define PI 3.141592653589793
 
-		#define HEXSCALE 90.0
+		#define HEXSCALE 80.0
 
 		#define SZDRIFTTOUV 7.0
 
@@ -282,51 +287,231 @@ function ShieldSphereColorHQParticle:Initialize()
 			return vec2(sphereCoords.x * 0.5 + 0.5, 1.0 - sphereCoords.y);
 		}
 
+/* Magic angle that equalizes projected area of squares on sphere. */
+#define MAGIC_ANGLE 0.883475248536 // radians
+
+/* Try to restrict branching? Don't know if this has any effect... */
+#define RESTRICT_BRANCHING
+
+float warp_theta = MAGIC_ANGLE;
+float tan_warp_theta = tan(warp_theta);
+
+const float N = 15;
+
+/* Return a permutation matrix whose first two columns are u and v basis 
+   vectors for a cube face, and whose third column indicates which axis 
+   (x,y,z) is maximal. */
+mat3 getPT(in vec3 p) {
+
+    vec3 a = abs(p);
+    float c = max(max(a.x, a.y), a.z);    
+#ifdef RESTRICT_BRANCHING
+    vec3 s = step(vec3(c), a);
+    s.yz -= vec2(s.x*s.y, (s.x + s.y - s.x*s.y)*s.z);
+#else
+    vec3 s = c == a.x ? vec3(1.,0,0) : c == a.y ? vec3(0,1.,0) : vec3(0,0,1.);
+#endif
+    s *= sign(dot(p, s));
+    vec3 q = s.yzx;
+    return mat3(cross(q,s), q, s);
+
+}
+
+/* For any point in 3D, obtain the permutation matrix, as well as grid coordinates
+   on a cube face. */
+void posToGrid(in vec3 pos, out mat3 PT, out vec2 g) {
+    
+    // Get permutation matrix and cube face id
+    PT = getPT(pos);
+    
+    // Project to cube face
+    vec3 c = pos * PT;     
+    vec2 p = c.xy / c.z;      
+    
+    // Unwarp through arctan function
+    vec2 q = atan(p*tan_warp_theta)/warp_theta; 
+    
+    // Map [-1,1] interval to [0,N] interval
+    g = (q*0.5 + 0.5)*N;
+    
+}
+
+
+/* For any grid point on a cube face, along with projection matrix, 
+   obtain the 3D point it represents. */
+vec3 gridToPos(in mat3 PT, in vec2 g) {
+    
+    // Map [0,N] to [-1,1]
+    vec2 q = g/N * 2.0 - 1.0;
+    
+    // Warp through tangent function
+    vec2 p = tan(warp_theta*q)/tan_warp_theta;
+
+    // Map back through permutation matrix to place in 3D.
+    return PT * vec3(p, 1.0);
+    
+}
+
+
+/* Return whether a neighbor can be identified for a particular grid cell.
+   We do not allow moves that wrap more than one face. For example, the 
+   bottom-left corner (0,0) on the +X face may get stepped by (-1,0) to 
+   end up on the -Y face, or, stepped by (0,-1) to end up on the -Z face, 
+   but we do not allow the motion (-1,-1) from that spot. If a neighbor is 
+   found, the permutation/projection matrix and grid coordinates of the 
+   neighbor are computed.
+*/
+bool gridNeighbor(in mat3 PT, in vec2 g, in vec2 delta, out mat3 PTn, out vec2 gn) {
+
+    vec2 g_dst = g.xy + delta;
+    vec2 g_dst_clamp = clamp(g_dst, 0.0, N);
+
+    vec2 extra = abs(g_dst_clamp - g_dst);
+    float esum = extra.x + extra.y;
+ 
+#ifdef RESTRICT_BRANCHING    
+        
+    vec3 pos = PT * vec3(g_dst_clamp/N*2.0-1.0, 1.0 - 2.0*esum/N);
+    PTn = getPT(pos);
+    gn = ((pos*PTn).xy*0.5 + 0.5) * N;
+    
+    return min(extra.x, extra.y) == 0.0 && esum < N;
+    
+#else
+    
+    if (max(extra.x, extra.y) == 0.0) {
+        PTn = PT;
+        gn = g_dst;
+        return true;
+    } else if (min(extra.x, extra.y) == 0.0 && esum < N) {
+        // Magic stuff happens here.
+        vec3 pos = PT * vec3(g_dst_clamp/N*2.0-1.0, 1.0 - 2.0*esum/N);
+        PTn = getPT(pos);
+        gn = ((pos * PTn).xy*0.5 + 0.5) * N;
+        return true;	        
+    } else {
+        return false;
+    }
+    
+#endif
+
+}
+
+/* From https://www.shadertoy.com/view/Xd23Dh */
+vec3 hash3( vec2 p )
+{
+    vec3 q = vec3( dot(p,vec2(127.1,311.7)), 
+                  dot(p,vec2(269.5,183.3)), 
+                  dot(p,vec2(419.2,371.9)) );
+    return fract(sin(q)*43758.5453);
+}
+
+/* Return squared great circle distance of two points projected onto sphere. */
+float sphereDist2(vec3 a, vec3 b) {
+	// Fast-ish approximation for acos(dot(normalize(a), normalize(b)))^2
+    return 2.0-2.0*dot(normalize(a),normalize(b));
+}
+
+
+/* Just used to visualize distance from spherical Voronoi cell edges. */
+float bisectorDistance(vec3 p, vec3 a, vec3 b) {
+    vec3 n1 = cross(a,b);
+    vec3 n2 = normalize(cross(n1, 0.5*(normalize(a)+normalize(b))));
+    return abs(dot(p, n2));             
+}
+
+/* Color the sphere/cube points. */
+vec3 gcolor(vec3 pos) {
+
+    mat3 PT;
+    vec2 g;
+
+    // Get grid coords
+    posToGrid(pos, PT, g);
+    
+    // Snap to cube face - note only needed for visualization.
+    pos /= dot(pos, PT[2]);
+
+    const float farval = 1e5;
+    
+    // Distances/colors/points for Voronoi
+    float d1 = farval;
+    float d2 = farval;
+
+    float m1 = -1.0;
+    float m2 = -1.0;
+
+    vec3 p1 = vec3(0);
+    vec3 p2 = vec3(0);
+
+	// For drawing grid lines below
+    vec2 l = abs(fract(g+0.5)-0.5);
+
+    // Move to center of grid cell for neighbor calculation below.
+    g = floor(g) + 0.5;
+
+    // For each potential neighbor
+    for (float u=-1.0; u<=1.0; ++u) {
+        for (float v=-1.0; v<=1.0; ++v) {
+            
+            vec2 gn;
+            mat3 PTn;
+
+            // If neighbor exists
+            if (gridNeighbor(PT, g, vec2(u,v), PTn, gn)) {
+                
+                float face = dot(PTn[2], vec3(1.,2.,3.));
+                
+                // Perturb based on grid cell ID
+                gn = floor(gn);
+                vec3 rn = hash3(gn*0.123 + face);
+                //gn += 0.5 + (rn.xy * 2.0 - 1.0)*1.0*0.5;
+				//gn += vec2(0.5);
+				//gn += hex(vec2 p, float width, float coreSize)
+
+                // Get the 3D position
+                vec3 pos_n = gridToPos(PTn, gn);
+                
+                // Compute squared distance on sphere
+                float dp = sphereDist2(pos, pos_n);
+                
+                // See if new closest point (or second closest)
+                if (dp < d1) {
+                    d2 = d1; p2 = p1;
+                    d1 = dp; p1 = pos_n;
+                } else if (dp < d2) {
+                    d2 = dp; p2 = pos_n;
+                }
+                
+            }
+        }
+    }
+
+    vec3 c = vec3(1.0);
+
+    // voronoi lines    
+    c = mix(c, vec3(0.0),
+            smoothstep(0.005, 0.001, bisectorDistance(pos, p2, p1)));
+
+    // goodbye
+    return c;
+
+}
+
+
 		void main(void)
 		{
-			vec2 uvMulS = vec2(1.0, 0.5) * uvMul;
-			vec2 uv = RadialCoords(normal) * uvMulS;
+			//vec3 color = 1.0 - gcolor(normal);
+			mat3 PT;
+			vec2 g;
 
-			vec2 offset = vec2(0.0);
-
-			offset += GetRippleCoord(uv, vec2(0.75, 0.5) * uvMulS, sizeDrift * SZDRIFTTOUV, 80.0, 15.0, timer);
-			//offset += GetRippleCoord(uv, vec2(0.5, 0.5) * uvMulS, 0.01, 80.0, 15.0, timer);
-			//offset += GetRippleCoord(uv, vec2(1.0, 0.5) * uvMulS, 0.01, 80.0, 15.0, timer);
-
-			vec2 offset2 = vec2(0.0);
-
-			for (int hitPointIdx = 0; hitPointIdx < MAX_POINTS; ++hitPointIdx) {
-				if (hitPointIdx < hitPointCount) {
-					vec3 impactPoint = vec3(hitPoints[5 * hitPointIdx + 0], hitPoints[5 * hitPointIdx + 1], hitPoints[5 * hitPointIdx + 2]);
-					vec3 impactPointAdj = (vec4(impactPoint, 1.0) * viewMatrixI).xyz;
-					vec2 impactPointUV = RadialCoords(impactPointAdj) * uvMulS;
-					float mag = hitPoints[5 * hitPointIdx + 3];
-					float aoe = hitPoints[5 * hitPointIdx + 4];
-					offset2 += GetRippleLinearFallOffCoord(uv, impactPointUV, mag, 100.0, -120.0, aoe, timer);
-				}
-			}
-
-			vec2 uvo = uv + offset + offset2; //this is to trick GLSL compiler, otherwise shot-induced ripple is not drawn. Silly....
-
-			vec4 texel;
-			if (method == 0)
-				texel = vec4(1.0 - hex(uvo * HEXSCALE, 0.2, 0.01));
-			else if (method == 1)
-				texel = texture2D(tex0, uvo);
-			else
-				texel = vec4(0.0);
-
-			vec4 colorMultAdj = colorMult * (1.0 + length(offset2) * 50.0);
-			//float colorMultAdj = colorMult;
-			//vec4 color1M = color1 * colorMultAdj;
-			vec4 color2M = color2 * colorMultAdj;
-
-			vec4 color1Tex = mix(color1, texel, colorMix);
-			vec4 color1TexM = color1Tex * colorMultAdj;
-
-			gl_FragColor = mix(color1TexM, color2M, opac);
-			//gl_FragColor = mix(color1Tex, color2M, opac);
-			//gl_FragColor = texel;
+			// Get grid coords
+			//posToGrid(normal, PT, g);
+			//float color = hex(g, 0.1, 0.01);
+			
+			//gl_FragColor = vec4(color, color, color, 0.5);
+			vec3 color = 1.0 - gcolor(normal);
+			gl_FragColor = vec4(color, 0.5);
 		}
 	]],
 		uniformInt = {
