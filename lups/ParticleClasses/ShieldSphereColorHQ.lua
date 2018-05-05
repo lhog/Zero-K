@@ -296,7 +296,7 @@ function ShieldSphereColorHQParticle:Initialize()
 float warp_theta = MAGIC_ANGLE;
 float tan_warp_theta = tan(warp_theta);
 
-const float N = 15;
+float N = 16;
 
 /* Return a permutation matrix whose first two columns are u and v basis 
    vectors for a cube face, and whose third column indicates which axis 
@@ -305,111 +305,36 @@ mat3 getPT(in vec3 p) {
 
     vec3 a = abs(p);
     float c = max(max(a.x, a.y), a.z);    
-#ifdef RESTRICT_BRANCHING
-    vec3 s = step(vec3(c), a);
-    s.yz -= vec2(s.x*s.y, (s.x + s.y - s.x*s.y)*s.z);
-#else
+
     vec3 s = c == a.x ? vec3(1.,0,0) : c == a.y ? vec3(0,1.,0) : vec3(0,0,1.);
-#endif
+
     s *= sign(dot(p, s));
     vec3 q = s.yzx;
     return mat3(cross(q,s), q, s);
 
 }
 
-/* For any point in 3D, obtain the permutation matrix, as well as grid coordinates
-   on a cube face. */
-void posToGrid(in vec3 pos, out mat3 PT, out vec2 g) {
-    
-    // Get permutation matrix and cube face id
-    PT = getPT(pos);
-    
-    // Project to cube face
-    vec3 c = pos * PT;     
-    vec2 p = c.xy / c.z;      
-    
-    // Unwarp through arctan function
-    vec2 q = atan(p*tan_warp_theta)/warp_theta; 
-    
-    // Map [-1,1] interval to [0,N] interval
-    g = (q*0.5 + 0.5)*N;
-    
+/* Warp to go cube -> sphere */
+vec2 warp(vec2 x) {
+    return tan(warp_theta*x)/tan_warp_theta;
 }
 
-
-/* For any grid point on a cube face, along with projection matrix, 
-   obtain the 3D point it represents. */
-vec3 gridToPos(in mat3 PT, in vec2 g) {
-    
-    // Map [0,N] to [-1,1]
-    vec2 q = g/N * 2.0 - 1.0;
-    
-    // Warp through tangent function
-    vec2 p = tan(warp_theta*q)/tan_warp_theta;
-
-    // Map back through permutation matrix to place in 3D.
-    return PT * vec3(p, 1.0);
-    
-}
-
-
-/* Return whether a neighbor can be identified for a particular grid cell.
-   We do not allow moves that wrap more than one face. For example, the 
-   bottom-left corner (0,0) on the +X face may get stepped by (-1,0) to 
-   end up on the -Y face, or, stepped by (0,-1) to end up on the -Z face, 
-   but we do not allow the motion (-1,-1) from that spot. If a neighbor is 
-   found, the permutation/projection matrix and grid coordinates of the 
-   neighbor are computed.
-*/
-bool gridNeighbor(in mat3 PT, in vec2 g, in vec2 delta, out mat3 PTn, out vec2 gn) {
-
-    vec2 g_dst = g.xy + delta;
-    vec2 g_dst_clamp = clamp(g_dst, 0.0, N);
-
-    vec2 extra = abs(g_dst_clamp - g_dst);
-    float esum = extra.x + extra.y;
- 
-#ifdef RESTRICT_BRANCHING    
-        
-    vec3 pos = PT * vec3(g_dst_clamp/N*2.0-1.0, 1.0 - 2.0*esum/N);
-    PTn = getPT(pos);
-    gn = ((pos*PTn).xy*0.5 + 0.5) * N;
-    
-    return min(extra.x, extra.y) == 0.0 && esum < N;
-    
-#else
-    
-    if (max(extra.x, extra.y) == 0.0) {
-        PTn = PT;
-        gn = g_dst;
-        return true;
-    } else if (min(extra.x, extra.y) == 0.0 && esum < N) {
-        // Magic stuff happens here.
-        vec3 pos = PT * vec3(g_dst_clamp/N*2.0-1.0, 1.0 - 2.0*esum/N);
-        PTn = getPT(pos);
-        gn = ((pos * PTn).xy*0.5 + 0.5) * N;
-        return true;	        
-    } else {
-        return false;
-    }
-    
-#endif
-
-}
-
-/* From https://www.shadertoy.com/view/Xd23Dh */
-vec3 hash3( vec2 p )
-{
-    vec3 q = vec3( dot(p,vec2(127.1,311.7)), 
-                  dot(p,vec2(269.5,183.3)), 
-                  dot(p,vec2(419.2,371.9)) );
-    return fract(sin(q)*43758.5453);
+/* Unwarp to go sphere -> cube */
+vec2 unwarp(vec2 x) {
+    return atan(x*tan_warp_theta)/warp_theta; 
 }
 
 /* Return squared great circle distance of two points projected onto sphere. */
 float sphereDist2(vec3 a, vec3 b) {
 	// Fast-ish approximation for acos(dot(normalize(a), normalize(b)))^2
     return 2.0-2.0*dot(normalize(a),normalize(b));
+}
+
+
+/* Just used for visualization to make sure dots are round regardless of 
+   whether we are visualizing them on cube or sphere. */
+float sphereOrCubeDist(vec3 a, vec3 b) {
+    return mix(length(a-b), sqrt(sphereDist2(a,b)), 1.0);    
 }
 
 
@@ -420,83 +345,184 @@ float bisectorDistance(vec3 p, vec3 a, vec3 b) {
     return abs(dot(p, n2));             
 }
 
+
+/* RGB from hue. */
+vec3 hue(float h) {
+    vec3 c = mod(h*6.0 + vec3(2, 0, 4), 6.0);
+    return h >= 1.0 ? vec3(h-1.0) : clamp(min(c, -c+4.0), 0.0, 1.0);
+}
+
+
+/* Get index (0-5) for axis. */
+float axisToIdx(vec3 axis) {
+    
+    float idx = dot(abs(axis), vec3(0.0, 2.0, 4.0));
+    if (dot(axis, vec3(1.0)) < 0.0) { idx += 1.0; }
+    
+    return idx;
+    
+}
+
+/* From https://www.shadertoy.com/view/4djSRW */
+
+#define HASHSCALE3 vec3(.1031, .1030, .0973)
+
+vec3 hash33(vec3 p3) {
+	p3 = fract(p3 * HASHSCALE3);
+    p3 += dot(p3, p3.yxz+19.19);
+    return fract((p3.xxy + p3.yxx)*p3.zyx);
+
+}
+
+bool wrapCube(in mat3 PT, 
+              inout vec2 uvn,
+              out mat3 PTn) {
+    
+    // new uv location might have gone off edge of cube face
+    // ...see if it has by comparing to clamped version
+    vec2 uvn_clamp = clamp(uvn, -1.0, 1.0);
+    vec2 extra = abs(uvn_clamp - uvn);
+
+    // it doesn't make sense to go over both corners so only allow
+    // overflow/underflow in u or v but not both
+    if (min(extra.x, extra.y) > 0.0) {
+        
+        return false;
+        
+    } else {            
+
+        // check if we have gone off starting face
+        float esum = extra.x + extra.y;
+
+        if (esum > 0.0) {
+            // need to re-establish what face we are on
+            vec3 p = PT * vec3(uvn_clamp, 1.0 - esum);
+            PTn = getPT(p);
+            uvn = (p * PTn).xy;
+        } else {
+            // same as starting face
+            PTn = PT;
+        }
+
+        return true;
+        
+    }
+    
+}
+
+
 /* Color the sphere/cube points. */
 vec3 gcolor(vec3 pos) {
 
-    mat3 PT;
-    vec2 g;
-
-    // Get grid coords
-    posToGrid(pos, PT, g);
+    // get permutation matrix 
+    mat3 PT = getPT(pos);
     
-    // Snap to cube face - note only needed for visualization.
-    pos /= dot(pos, PT[2]);
-
-    const float farval = 1e5;
+    // project to cube face
+    vec3 cf = pos * PT; 
     
-    // Distances/colors/points for Voronoi
-    float d1 = farval;
-    float d2 = farval;
+    // UV is in [-1, 1] range
+    vec2 uv = cf.xy / cf.z; 
+    
+    // unwarp from sphere -> cube (approximtion of atan)
+    uv = unwarp(uv);      
+    
+    // for viz only
+    pos /= (dot(pos, PT[2]));
+    
+    // quantize uv of nearest cell
+    vec2 uv_ctr = (floor(0.5*N*uv + 0.5) + 0.5)*2.0/N;
+    
+    // for drawing grid lines below
+    vec2 l = abs(mod(uv + 1.0/N, 2.0/N) - 1.0/N)*0.5*N;
 
-    float m1 = -1.0;
-    float m2 = -1.0;
+    // store distance, material & point for 1st, 2nd closest
+    float d1 = 1e4, d2 = 1e4;
+    float m1 = -1.0, m2 = -1.0;
+    vec3 p1 = vec3(0), p2 = vec3(0);
 
-    vec3 p1 = vec3(0);
-    vec3 p2 = vec3(0);
-
-	// For drawing grid lines below
-    vec2 l = abs(fract(g+0.5)-0.5);
-
-    // Move to center of grid cell for neighbor calculation below.
-    g = floor(g) + 0.5;
-
-    // For each potential neighbor
-    for (float u=-1.0; u<=1.0; ++u) {
-        for (float v=-1.0; v<=1.0; ++v) {
+    // for neighbors in 4x4 neighborhood
+    for (int du=-2; du<=1; ++du) {
+        for (int dv=-2; dv<=1; ++dv) {
             
-            vec2 gn;
             mat3 PTn;
+            
+            // any time you see 2.0/N it maps from [-1, 1] to [0, N]
+            vec2 uvn = uv_ctr + vec2(float(du), float(dv))*2.0/N;
+            
+            if (wrapCube(PT, uvn, PTn)) {
 
-            // If neighbor exists
-            if (gridNeighbor(PT, g, vec2(u,v), PTn, gn)) {
+                // now generate a unique id for the cell
+                vec2 ssn = floor((uvn*0.5 + 0.5)*N);
+                float faceid = axisToIdx(PTn[2]);
+                vec3 id = vec3(ssn, faceid);
                 
-                float face = dot(PTn[2], vec3(1.,2.,3.));
-                
-                // Perturb based on grid cell ID
-                gn = floor(gn);
-                vec3 rn = hash3(gn*0.123 + face);
-                //gn += 0.5 + (rn.xy * 2.0 - 1.0)*1.0*0.5;
-				//gn += vec2(0.5);
-				//gn += hex(vec2 p, float width, float coreSize)
+                // generate 3 random #'s from id
+                vec3 r = hash33(id);
+                r.xy = nsin(5*timer + r.xy * 2 * PI);
+				
+                // randomize dot position within cell
+                uvn += (r.xy-0.5)*2.0/N;
+				
+				//uvn = nsin(timer + 2*PI*uvn);
 
-                // Get the 3D position
-                vec3 pos_n = gridToPos(PTn, gn);
+                // random material
+                float mn = mix((faceid+0.5 + 0.5*r.z - 0.25)/6.0, r.z, 1.0);
                 
-                // Compute squared distance on sphere
-                float dp = sphereDist2(pos, pos_n);
-                
-                // See if new closest point (or second closest)
-                if (dp < d1) {
-                    d2 = d1; p2 = p1;
-                    d1 = dp; p1 = pos_n;
-                } else if (dp < d2) {
-                    d2 = dp; p2 = pos_n;
+                // warp cube -> sphere
+                uvn = warp(uvn);
+
+                // can save 1 multiplication over general matrix mult.
+                // because we know last coord is 1
+                vec3 pn = PTn[0]*uvn.x + PTn[1]*uvn.y + PTn[2];
+
+                // update distances if closer
+                float dn = sphereDist2(pn, pos);
+ 
+                if (dn < d1) {
+                    d2 = d1; p2 = p1; m2 = m1;
+                    d1 = dn; p1 = pn; m1 = mn;
+                } else if (dn < d2) {
+                    d2 = dn; p2 = pn; m2 = mn;
                 }
-                
+
             }
+            
         }
+            
     }
 
-    vec3 c = vec3(1.0);
+    // get distance to voronoi boundary
+    float b = bisectorDistance(pos, p2, p1);
+    
+    // rainbow stained glass texture business
+    //m1 = fract(m1 + enable_texture*(0.5*sqrt(N))*(sqrt(d2)-sqrt(d1)));
+    
+    // cell background color
+    //vec3 bg = mix(hue(m1), hue(m2), 0.5*smoothstep(0.003, 0.0, b));
+	//vec3 c = vec3(b);
+	vec3 c = vec3(0.0);
+    
+    // gray vs rgb
+    //vec3 c = mix(vec3(0.9), bg, enable_color);
 
+    // grid lines
+    //float s = mix(0.02, 0.015, sphere_fraction);
+    //c = mix(c, vec3(0.7), smoothstep(2.0*s, s, min(l.x, l.y))*enable_grid_lines);
+	
+	//voronoi isolines
+	c = mix(vec3(1.0), c, smoothstep(0.01, 0.3, fract(b * 100)));
+	
     // voronoi lines    
-    c = mix(c, vec3(0.0),
-            smoothstep(0.005, 0.001, bisectorDistance(pos, p2, p1)));
+    c = mix(vec3(1.0), c, smoothstep(0.001, 0.01, b));
 
-    // goodbye
+    // draw points
+    //c = mix(c, vec3(0.0), smoothstep(dot_step, 0.0, sphereOrCubeDist(pos, p1)-dot_size)*enable_points);
+
     return c;
-
+    
+    
 }
+
 
 
 		void main(void)
@@ -510,8 +536,19 @@ vec3 gcolor(vec3 pos) {
 			//float color = hex(g, 0.1, 0.01);
 			
 			//gl_FragColor = vec4(color, color, color, 0.5);
-			vec3 color = 1.0 - gcolor(normal);
-			gl_FragColor = vec4(color, 0.5);
+			vec3 color = gcolor(normal);
+			vec4 texel = vec4(color.x);
+			//gl_FragColor = vec4(0.5);
+			
+			float colorMultAdj = colorMult;
+			vec4 color1M = color1 * colorMultAdj;
+			vec4 color2M = color2 * colorMultAdj;
+			vec4 color1Tex = mix(color1, texel, colorMix);
+			vec4 color1TexM = color1Tex * colorMultAdj;
+			gl_FragColor = mix(color1TexM, color2M, opac);
+			//gl_FragColor = mix(color1Tex, color2M, opac);
+			//gl_FragColor = texel;			
+			
 		}
 	]],
 		uniformInt = {
