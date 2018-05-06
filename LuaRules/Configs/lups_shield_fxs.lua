@@ -80,7 +80,7 @@ for unitDefID = 1, #UnitDefs do
 				myShield.shieldSize = "small"
 				--==  HQ  ==--
 				myShield.sizeDrift = 0.014;
-				myShield.marginHQ = 5.5
+				myShield.marginHQ = 9.5
 				myShield.uvMul = 0.3
 				--== /HQ  ==--
 			end

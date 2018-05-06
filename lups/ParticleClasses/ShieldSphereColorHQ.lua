@@ -204,7 +204,8 @@ function ShieldSphereColorHQParticle:Initialize()
 			float theta = acos(gl_Vertex.z / r);
 			float phi = atan(gl_Vertex.y, gl_Vertex.x);
 
-			r += sizeDrift * r * nsin(2.0 * theta + 3.0 * phi + timer * DRIFT_FREQ);
+			//r += sizeDrift * r * nsin(2.0 * theta + 3.0 * phi + timer * DRIFT_FREQ);
+			r += 0.0 * r * nsin(2.0 * theta + 3.0 * phi + timer * 0.0);
 
 			vec4 myVertex;
 			myVertex = vec4(r * sin(theta) * cos(phi), r * sin(theta) * sin(phi), r * cos(theta), 1.0f);
@@ -290,9 +291,6 @@ function ShieldSphereColorHQParticle:Initialize()
 /* Magic angle that equalizes projected area of squares on sphere. */
 #define MAGIC_ANGLE 0.883475248536 // radians
 
-/* Try to restrict branching? Don't know if this has any effect... */
-#define RESTRICT_BRANCHING
-
 float warp_theta = MAGIC_ANGLE;
 float tan_warp_theta = tan(warp_theta);
 
@@ -330,28 +328,12 @@ float sphereDist2(vec3 a, vec3 b) {
     return 2.0-2.0*dot(normalize(a),normalize(b));
 }
 
-
-/* Just used for visualization to make sure dots are round regardless of 
-   whether we are visualizing them on cube or sphere. */
-float sphereOrCubeDist(vec3 a, vec3 b) {
-    return mix(length(a-b), sqrt(sphereDist2(a,b)), 1.0);    
-}
-
-
 /* Just used to visualize distance from spherical Voronoi cell edges. */
 float bisectorDistance(vec3 p, vec3 a, vec3 b) {
     vec3 n1 = cross(a,b);
     vec3 n2 = normalize(cross(n1, 0.5*(normalize(a)+normalize(b))));
     return abs(dot(p, n2));             
 }
-
-
-/* RGB from hue. */
-vec3 hue(float h) {
-    vec3 c = mod(h*6.0 + vec3(2, 0, 4), 6.0);
-    return h >= 1.0 ? vec3(h-1.0) : clamp(min(c, -c+4.0), 0.0, 1.0);
-}
-
 
 /* Get index (0-5) for axis. */
 float axisToIdx(vec3 axis) {
@@ -427,22 +409,19 @@ vec3 gcolor(vec3 pos) {
     uv = unwarp(uv);      
     
     // for viz only
-    pos /= (dot(pos, PT[2]));
+    //pos /= (dot(pos, PT[2]));
     
     // quantize uv of nearest cell
     vec2 uv_ctr = (floor(0.5*N*uv + 0.5) + 0.5)*2.0/N;
-    
-    // for drawing grid lines below
-    vec2 l = abs(mod(uv + 1.0/N, 2.0/N) - 1.0/N)*0.5*N;
 
     // store distance, material & point for 1st, 2nd closest
     float d1 = 1e4, d2 = 1e4;
-    float m1 = -1.0, m2 = -1.0;
-    vec3 p1 = vec3(0), p2 = vec3(0);
+
+    vec3 p1 = vec3(0.0), p2 = vec3(0.0);
 
     // for neighbors in 4x4 neighborhood
-    for (int du=-2; du<=1; ++du) {
-        for (int dv=-2; dv<=1; ++dv) {
+    for (int du=-1; du<=1; ++du) {
+        for (int dv=-1; dv<=1; ++dv) {
             
             mat3 PTn;
             
@@ -457,18 +436,15 @@ vec3 gcolor(vec3 pos) {
                 vec3 id = vec3(ssn, faceid);
                 
                 // generate 3 random #'s from id
-                vec3 r = hash33(id);
-				r.xy = vec2(0.5);
+                //vec3 r = hash33(id);
+				vec3 r = vec3(0.5, 0.5, 0.0);
                 //r.xy = nsin(5.0*timer + r.xy * 2.0 * PI);
 				
                 // randomize dot position within cell
-                uvn += (r.xy-0.5)*2.0/N;
+                //uvn += (r.xy-0.5)*2.0/N;
 				
 				//uvn = nsin(timer + 2.0*PI*uvn);
 
-                // random material
-                float mn = mix((faceid+0.5 + 0.5*r.z - 0.25)/6.0, r.z, 1.0);
-                
                 // warp cube -> sphere
                 uvn = warp(uvn);
 
@@ -480,10 +456,10 @@ vec3 gcolor(vec3 pos) {
                 float dn = sphereDist2(pn, pos);
  
                 if (dn < d1) {
-                    d2 = d1; p2 = p1; m2 = m1;
-                    d1 = dn; p1 = pn; m1 = mn;
+                    d2 = d1; p2 = p1;
+                    d1 = dn; p1 = pn;
                 } else if (dn < d2) {
-                    d2 = dn; p2 = pn; m2 = mn;
+                    d2 = dn; p2 = pn;
                 }
 
             }
@@ -494,37 +470,29 @@ vec3 gcolor(vec3 pos) {
 
     // get distance to voronoi boundary
     float b = bisectorDistance(pos, p2, p1);
-    
-    // rainbow stained glass texture business
-    //m1 = fract(m1 + enable_texture*(0.5*sqrt(N))*(sqrt(d2)-sqrt(d1)));
-    
-    // cell background color
-    //vec3 bg = mix(hue(m1), hue(m2), 0.5*smoothstep(0.003, 0.0, b));
-	//vec3 c = vec3(b);
-	vec3 c = vec3(0.0);
-    
-    // gray vs rgb
-    //vec3 c = mix(vec3(0.9), bg, enable_color);
 
-    // grid lines
-    //float s = mix(0.02, 0.015, sphere_fraction);
-    //c = mix(c, vec3(0.7), smoothstep(2.0*s, s, min(l.x, l.y))*enable_grid_lines);
+	vec3 c = vec3(0.0);
 	
 	//voronoi isolines
-	c = mix(vec3(1.0), c, smoothstep(0.01, 0.3, fract(b * 100.0)));
+	//c = mix(vec3(1.0), c, smoothstep(0.01, 0.3, fract(b * 50.0)));
 	
     // voronoi lines    
     c = mix(vec3(1.0), c, smoothstep(0.001, 0.01, b));
-
-    // draw points
-    //c = mix(c, vec3(0.0), smoothstep(dot_step, 0.0, sphereOrCubeDist(pos, p1)-dot_size)*enable_points);
 
     return c;
     
     
 }
 
-
+		vec3 GetRippleLinearFallOffCoord3(vec3 point, vec3 center, float mag, float waveFreq, float waveSpeed, float waveDist, float time)
+		{		
+			vec3 dir = normalize(point - center);
+			float dist = sphereDist2(point, center);
+			float magMult = (1.0 - smoothstep(0.0, waveDist, dist));
+			vec3 offset = dir * (nsin(dist * waveFreq - time * waveSpeed)) * mag * magMult;
+			return offset;
+		}
+		
 
 		void main(void)
 		{
@@ -537,11 +505,29 @@ vec3 gcolor(vec3 pos) {
 			//float color = hex(g, 0.1, 0.01);
 			
 			//gl_FragColor = vec4(color, color, color, 0.5);
-			vec3 color = gcolor(normal);
+			
+			vec3 offset3 = vec3(0.0);
+
+			for (int hitPointIdx = 0; hitPointIdx < MAX_POINTS; ++hitPointIdx) {
+				if (hitPointIdx < hitPointCount) {
+					vec3 impactPoint = vec3(hitPoints[5 * hitPointIdx + 0], hitPoints[5 * hitPointIdx + 1], hitPoints[5 * hitPointIdx + 2]);
+					vec3 impactPointAdj = normalize((vec4(impactPoint, 1.0) * viewMatrixI).xyz);
+					
+					float mag = hitPoints[5 * hitPointIdx + 3];
+					float aoe = hitPoints[5 * hitPointIdx + 4];
+					offset3 += GetRippleLinearFallOffCoord3(normal, impactPointAdj, mag, 100.0, -120.0, aoe, timer);
+				}
+			}
+
+			vec3 pointAdj = normal + offset3; //this is to trick GLSL compiler, otherwise shot-induced ripple is not drawn. Silly....
+			
+			
+			
+			vec3 color = gcolor(pointAdj);
 			vec4 texel = vec4(color.x);
 			//gl_FragColor = vec4(0.5);
 			
-			vec4 colorMultAdj = colorMult;
+			vec4 colorMultAdj = colorMult * (1.0 + length(offset3) * 1.0);
 			vec4 color1M = color1 * colorMultAdj;
 			vec4 color2M = color2 * colorMultAdj;
 			vec4 color1Tex = mix(color1, texel, colorMix);

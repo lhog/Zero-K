@@ -180,8 +180,8 @@ local function spherical2cart(r, theta, phi)
 	return dx, dy, dz
 end
 
-local AOE_MIN = 0.04
-local AOE_MAX = 0.15
+local AOE_MIN = 0.01
+local AOE_MAX = 0.3
 
 local LOG10 = math.log(10)
 
