@@ -204,7 +204,7 @@ function ShieldSphereColorHQParticle:Initialize()
 			float theta = acos(gl_Vertex.z / r);
 			float phi = atan(gl_Vertex.y, gl_Vertex.x);
 
-			r += sizeDrift * r * nsin(2*theta + 3*phi + timer * DRIFT_FREQ);
+			r += sizeDrift * r * nsin(2.0 * theta + 3.0 * phi + timer * DRIFT_FREQ);
 
 			vec4 myVertex;
 			myVertex = vec4(r * sin(theta) * cos(phi), r * sin(theta) * sin(phi), r * cos(theta), 1.0f);
@@ -296,7 +296,7 @@ function ShieldSphereColorHQParticle:Initialize()
 float warp_theta = MAGIC_ANGLE;
 float tan_warp_theta = tan(warp_theta);
 
-float N = 16;
+float N = 16.0;
 
 /* Return a permutation matrix whose first two columns are u and v basis 
    vectors for a cube face, and whose third column indicates which axis 
@@ -458,12 +458,13 @@ vec3 gcolor(vec3 pos) {
                 
                 // generate 3 random #'s from id
                 vec3 r = hash33(id);
-                r.xy = nsin(5*timer + r.xy * 2 * PI);
+				r.xy = vec2(0.5);
+                //r.xy = nsin(5.0*timer + r.xy * 2.0 * PI);
 				
                 // randomize dot position within cell
                 uvn += (r.xy-0.5)*2.0/N;
 				
-				//uvn = nsin(timer + 2*PI*uvn);
+				//uvn = nsin(timer + 2.0*PI*uvn);
 
                 // random material
                 float mn = mix((faceid+0.5 + 0.5*r.z - 0.25)/6.0, r.z, 1.0);
@@ -510,7 +511,7 @@ vec3 gcolor(vec3 pos) {
     //c = mix(c, vec3(0.7), smoothstep(2.0*s, s, min(l.x, l.y))*enable_grid_lines);
 	
 	//voronoi isolines
-	c = mix(vec3(1.0), c, smoothstep(0.01, 0.3, fract(b * 100)));
+	c = mix(vec3(1.0), c, smoothstep(0.01, 0.3, fract(b * 100.0)));
 	
     // voronoi lines    
     c = mix(vec3(1.0), c, smoothstep(0.001, 0.01, b));
@@ -540,7 +541,7 @@ vec3 gcolor(vec3 pos) {
 			vec4 texel = vec4(color.x);
 			//gl_FragColor = vec4(0.5);
 			
-			float colorMultAdj = colorMult;
+			vec4 colorMultAdj = colorMult;
 			vec4 color1M = color1 * colorMultAdj;
 			vec4 color2M = color2 * colorMultAdj;
 			vec4 color1Tex = mix(color1, texel, colorMix);
@@ -560,8 +561,12 @@ vec3 gcolor(vec3 pos) {
 	})
 
 	local shLog = gl.GetShaderLog()
-	if (shieldShader == nil or string.len(shLog or "") > 0) then
+	if (string.len(shLog or "") > 0) then
 		print(PRIO_MAJOR, "LUPS->Shield: shader warnings & errors: "..shLog)
+		
+	end
+	
+	if not shieldShader then
 		return false
 	end
 
