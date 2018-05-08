@@ -161,7 +161,7 @@ function ShieldSphereColorHQParticle:Draw()
 			gl.Uniform(marginUniform, self.drawBackMargin)
 		end
 
-		--glCallList(sphereList[self.shieldSize])
+		glCallList(sphereList[self.shieldSize])
 	end
 end
 
@@ -519,12 +519,16 @@ vec3 gcolor(vec3 pos) {
 				}
 			}
 
-			vec3 pointAdj = normal + offset3; //this is to trick GLSL compiler, otherwise shot-induced ripple is not drawn. Silly....
+			vec3 pointAdj = normalize(normal + offset3); //this is to trick GLSL compiler, otherwise shot-induced ripple is not drawn. Silly....
 			
 			
 			
 			vec3 color = gcolor(pointAdj);
-			vec4 texel = vec4(color.x);
+			float col = color.x;
+			//col *= (0.2 + 1.0 * nsin(5.0 * pointAdj.x + 7.0 * pointAdj.y + 11.0 * pointAdj.z + timer * 15.0));
+			col *= (0.5 + 0.5 * nsin(25.0 * (pointAdj.z) + timer * 25.0));
+			vec4 texel = vec4(col);
+			
 			//gl_FragColor = vec4(0.5);
 			
 			vec4 colorMultAdj = colorMult * (1.0 + length(offset3) * 1.0);
