@@ -525,8 +525,8 @@ vec3 gcolor(vec3 pos) {
 			
 			vec3 color = gcolor(pointAdj);
 			float col = color.x;
-			//col *= (0.2 + 1.0 * nsin(5.0 * pointAdj.x + 7.0 * pointAdj.y + 11.0 * pointAdj.z + timer * 15.0));
-			col *= (0.5 + 0.5 * nsin(25.0 * (pointAdj.z) + timer * 25.0));
+			col *= (0.2 + 1.0 * nsin(5.0 * pointAdj.x + 7.0 * pointAdj.y + 11.0 * pointAdj.z + timer * 15.0));
+			//col *= (0.5 + 0.5 * nsin(25.0 * (pointAdj.z) + timer * 25.0));
 			vec4 texel = vec4(col);
 			
 			//gl_FragColor = vec4(0.5);
@@ -538,7 +538,7 @@ vec3 gcolor(vec3 pos) {
 			vec4 color1TexM = color1Tex * colorMultAdj;
 			gl_FragColor = mix(color1TexM, color2M, opac);
 			//gl_FragColor = mix(color1Tex, color2M, opac);
-			//gl_FragColor = texel;			
+			gl_FragColor = texel;			
 			
 		}
 	]],
