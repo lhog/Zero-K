@@ -92,6 +92,7 @@ function ShieldSphereColorHQParticle:EndDraw()
 	gl.UseShader(0)
 
 	gl.Texture(0, false)
+	gl.Texture(1, false)
 	lastTexture = ""
 
 	gl.Culling(false)
@@ -109,6 +110,8 @@ function ShieldSphereColorHQParticle:Draw()
 			lastTexture = self.texture
 		end
 	end
+	
+	gl.Texture(1, "$heightmap")
 
 	local col1, col2 = GetShieldColor(self.unit, self)
 
@@ -150,7 +153,17 @@ function ShieldSphereColorHQParticle:Draw()
 		gl.UniformArray(hitPointsUniform, 2, hitArray)
 	end
 
+	gl.PushMatrix()
+	--gl.MatrixMode(GL.MODELVIEW);
+	--gl.LoadIdentity()
+	gl.LoadMatrix("view")
+	gl.Scale(1,1,1)
+	local x, y, z = Spring.GetUnitPosition(self.unit)
+	gl.Translate(x, y, z)
 	glCallList(sphereList[self.shieldSize])
+	gl.PopMatrix()
+	
+	--[[
 
 	if self.drawBackHQ then
 		gl.Culling(GL.BACK)
@@ -163,6 +176,7 @@ function ShieldSphereColorHQParticle:Draw()
 
 		glCallList(sphereList[self.shieldSize])
 	end
+	]]--
 end
 
 -----------------------------------------------------------------------------------------------------------------
@@ -184,10 +198,14 @@ function ShieldSphereColorHQParticle:Initialize()
 		varying float opac;
 
 		varying vec3 normal;
+		
+		varying vec3 curVertex;
 
 		#define DRIFT_FREQ 25.0
 
 		#define PI 3.141592653589793
+		
+		uniform mat4 viewMatrixI;
 
 		#define nsin(x) (0.5 * sin(x) + 0.5)
 		
@@ -212,8 +230,10 @@ function ShieldSphereColorHQParticle:Initialize()
 
 			vec4 size4 = vec4(size, size, size, 1.0f);
 			gl_Position = gl_ModelViewProjectionMatrix * (myVertex * size4 + pos);
+			curVertex = (gl_Position * viewMatrixI).xyz;
 
-			normal = normalize(gl_NormalMatrix * gl_Normal);
+			//normal = normalize(gl_NormalMatrix * gl_Normal);
+			normal = normalize(gl_Normal);
 
 			vec3 vertex = vec3(gl_ModelViewMatrix * gl_Vertex);
 			float angle = dot(normal, vertex) * inversesqrt( dot(normal, normal) * dot(vertex, vertex) ); //dot(norm(n), norm(v))
@@ -241,8 +261,15 @@ function ShieldSphereColorHQParticle:Initialize()
 		uniform float hitPoints[5 * MAX_POINTS];
 
 		uniform sampler2D tex0;
+		
+		uniform sampler2D heightMap;
 
 		uniform int method;
+		
+		uniform int mapSizeX;
+		uniform int mapSizeZ;
+		
+		varying vec3 curVertex;
 
 		#define PI 3.141592653589793
 
@@ -525,7 +552,7 @@ vec3 gcolor(vec3 pos) {
 			
 			vec3 color = gcolor(pointAdj);
 			float col = color.x;
-			col *= (0.2 + 1.0 * nsin(5.0 * pointAdj.x + 7.0 * pointAdj.y + 11.0 * pointAdj.z + timer * 15.0));
+			//col *= (0.2 + 1.0 * nsin(5.0 * pointAdj.x + 7.0 * pointAdj.y + 11.0 * pointAdj.z + timer * 15.0));
 			//col *= (0.5 + 0.5 * nsin(25.0 * (pointAdj.z) + timer * 25.0));
 			vec4 texel = vec4(col);
 			
@@ -538,12 +565,26 @@ vec3 gcolor(vec3 pos) {
 			vec4 color1TexM = color1Tex * colorMultAdj;
 			gl_FragColor = mix(color1TexM, color2M, opac);
 			//gl_FragColor = mix(color1Tex, color2M, opac);
-			gl_FragColor = texel;			
+			
+			vec2 hmuv = curVertex.xz / vec2(mapSizeX, mapSizeZ);
+			vec4 height = texture2D(heightMap, hmuv);
+			
+			float hDiff = abs(height.x - curVertex.y);
+			
+			if (hDiff < 3.0) texel = vec4(1.0);
+			
+			//texel *= 1.0 + 4.0 * (1.0 - step(0.5, hDiff));
+			//texel *= 1.0 + 4.0 * (1.0 - step(0.5, hDiff));
+			
+			gl_FragColor = texel;		
 			
 		}
 	]],
 		uniformInt = {
 			tex0 = 0,
+			heightMap = 1,
+			mapSizeX = Game.mapSizeX,
+			mapSizeZ = Game.mapSizeZ,			
 		},
 		definitions = {
 			string.gsub("#define MAX_POINTS _PTS_NUM_ \n", "_PTS_NUM_", tostring(MAX_POINTS)),
