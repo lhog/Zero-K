@@ -21,6 +21,10 @@ local marginUniform
 local uvMulUniform
 
 local viewInvUniform
+local viewUniform
+local modelUniform
+local projUniform
+local normalUniform
 
 local hitPointCountUniform
 local hitPointsUniform
@@ -77,14 +81,36 @@ local PACE = 400
 
 local lastTexture = ""
 
+local function MatMul( m1, m2 )
+    if #m1[1] ~= #m2 then       -- inner matrix-dimensions must agree
+        return nil
+    end
+
+    local res = {}
+
+    for i = 1, #m1 do
+        res[i] = {}
+        for j = 1, #m2[1] do
+            res[i][j] = 0
+            for k = 1, #m2 do
+                res[i][j] = res[i][j] + m1[i][k] * m2[k][j]
+            end
+        end
+    end
+
+    return res
+end
+
 function ShieldSphereColorHQParticle:BeginDraw()
-	--gl.Clear(GL.STENCIL_BUFFER_BIT, 0)
 	gl.DepthMask(false)
+
 	gl.UseShader(shieldShader)
+
+	gl.Texture(1, "$heightmap")
 
 	local gf = Spring.GetGameFrame()
 	gl.Uniform(timerUniform,	gf / PACE)
-	gl.UniformMatrix(viewInvUniform, "viewinverse")
+	--gl.UniformMatrix(viewInvUniform, "viewinverse")
 end
 
 function ShieldSphereColorHQParticle:EndDraw()
@@ -92,12 +118,66 @@ function ShieldSphereColorHQParticle:EndDraw()
 	gl.UseShader(0)
 
 	gl.Texture(0, false)
+	gl.Texture(1, false)
 	lastTexture = ""
 
 	gl.Culling(false)
 end
 
 function ShieldSphereColorHQParticle:Draw()
+	gl.UniformMatrix(projUniform, "projection")
+
+	local mv11, mv12, mv13, mv14, mv21, mv22, mv23, mv24, mv31, mv32, mv33, mv34, mv41, mv42, mv43, mv44 = gl.GetMatrixData(GL.MODELVIEW)
+	local mv = {
+		[1] = {mv11, mv12, mv13, mv14},
+		[2] = {mv21, mv22, mv23, mv24},
+		[3] = {mv31, mv32, mv33, mv34},
+		[4] = {mv41, mv42, mv43, mv44},
+	}
+	--Spring.Echo("MV\n", mv11, mv12, mv13, mv14, "\n", mv21, mv22, mv23, mv24, "\n", mv31, mv32, mv33, mv34, "\n", mv41, mv42, mv43, mv44)
+	local vi11, vi12, vi13, vi14, vi21, vi22, vi23, vi24, vi31, vi32, vi33, vi34, vi41, vi42, vi43, vi44 = gl.GetMatrixData("viewinverse")
+	local vi = {
+		[1] = {vi11, vi12, vi13, vi14},
+		[2] = {vi21, vi22, vi23, vi24},
+		[3] = {vi31, vi32, vi33, vi34},
+		[4] = {vi41, vi42, vi43, vi44},
+	}
+	--Spring.Echo("VI\n", vi11, vi12, vi13, vi14, "\n", vi21, vi22, vi23, vi24, "\n", vi31, vi32, vi33, vi34, "\n", vi41, vi42, vi43, vi44)
+
+	local v11, v12, v13, v14, v21, v22, v23, v24, v31, v32, v33, v34, v41, v42, v43, v44 = gl.GetMatrixData("view")
+	local v = {
+		[1] = {v11, v12, v13, v14},
+		[2] = {v21, v22, v23, v24},
+		[3] = {v31, v32, v33, v34},
+		[4] = {v41, v42, v43, v44},
+	}
+
+	gl.UniformMatrix(viewUniform,	v[1][1], v[1][2], v[1][3], v[1][4],
+									v[2][1], v[2][2], v[2][3], v[2][4],
+									v[3][1], v[3][2], v[3][3], v[3][4],
+									v[4][1], v[4][2], v[4][3], v[4][4])
+
+
+	local m = MatMul(mv, vi)
+	--Spring.Echo("M\n", m[1][1], m[1][2], m[1][3], m[1][4], "\n", m[2][1], m[2][2], m[2][3], m[2][4], "\n", m[3][1], m[3][2], m[3][3], m[3][4], "\n", m[4][1], m[4][2], m[4][3], m[4][4])
+
+	--Only care about glTranslate() part of matrix
+	m[1] = {1, 0, 0, 0}
+	m[2] = {0, 1, 0, 0}
+	m[3] = {0, 0, 1, 0}
+	m[4] = {m[4][1], m[4][2], m[4][3], 1}
+
+	--Spring.Echo("M\n", m[4][1], m[4][2], m[4][3], 1)
+	gl.UniformMatrix(modelUniform,	m[1][1], m[1][2], m[1][3], m[1][4],
+									m[2][1], m[2][2], m[2][3], m[2][4],
+									m[3][1], m[3][2], m[3][3], m[3][4],
+									m[4][1], m[4][2], m[4][3], m[4][4])
+
+	local nm = MatMul(m, v)
+
+	gl.UniformMatrix(normalUniform,	nm[1][1], nm[1][2], nm[1][3],
+									nm[2][1], nm[2][2], nm[2][3],
+									nm[3][1], nm[3][2], nm[3][3])
 
 	gl.Culling(GL.FRONT)
 	if not self.texture then
@@ -180,9 +260,19 @@ ____VS_CODE_DEFS_____
 
 	uniform float sizeDrift;
 
+	uniform mat4 viewMatrix;
+	uniform mat4 modelMatrix;
+	uniform mat4 projectionMatrix;
+
+	uniform mat3 normalMatrix;
+
+	uniform float mapsizex, mapsizez;
+
 	varying float opac;
 
-	varying vec3 normal;
+	varying vec4 modelPos;
+	varying vec4 worldPos;
+	varying vec2 hmuv;
 
 	#define DRIFT_FREQ 25.0
 
@@ -200,26 +290,42 @@ ____VS_CODE_DEFS_____
 
 		r += sizeDrift * r * nsin(theta + phi + timer * DRIFT_FREQ);
 
-		vec4 myVertex;
-		myVertex = vec4(r * sin(theta) * cos(phi), r * sin(theta) * sin(phi), r * cos(theta), 1.0f);
-
+		vec4 newPos;
+		newPos = vec4(r * sin(theta) * cos(phi), r * sin(theta) * sin(phi), r * cos(theta), 1.0f);
 		vec4 size4 = vec4(size, size, size, 1.0f);
-		gl_Position = gl_ModelViewProjectionMatrix * (myVertex * size4 + pos);
 
-		normal = normalize(gl_NormalMatrix * gl_Normal);
+		//model position
+		modelPos = newPos * size4 + pos;
 
-		vec3 vertex = vec3(gl_ModelViewMatrix * myVertex);
-		float angle = dot(normal, vertex) * inversesqrt( dot(normal, normal) * dot(vertex, vertex) ); //dot(norm(n), norm(v))
+		//world position
+		worldPos = modelMatrix * modelPos;
+
+		//upper 3x3 part of revised ModelView matrix
+		vec3 normal = normalize(normalMatrix * gl_Normal);
+
+		//view position
+		vec4 viewPos = viewMatrix * worldPos;
+
+		hmuv = vec2(worldPos.x / mapsizex, worldPos.z / mapsizez);
+
+		float angle = dot(normal, viewPos.xyz) * inversesqrt( dot(normal, normal) * dot(viewPos.xyz, viewPos.xyz) ); //dot(norm(n), norm(v))
 		opac = pow( abs( angle ) , margin);
+
+		//projection position
+		gl_Position = projectionMatrix * viewPos;
 	}
 ]]
 
 local fsCode = [[
 ____FS_CODE_DEFS_____
 	varying float opac;
-	varying vec3 normal;
+	varying vec4 modelPos;
+	varying vec4 worldPos;
+	varying vec2 hmuv;
 
 	uniform float timer;
+
+	uniform float size;
 
 	uniform mat4 viewMatrixI;
 
@@ -236,6 +342,9 @@ ____FS_CODE_DEFS_____
 	uniform float hitPoints[5 * MAX_POINTS];
 
 	uniform sampler2D tex0;
+	uniform sampler2D heightMap;
+
+	uniform float mapsizex, mapsizez;
 
 	uniform int method;
 
@@ -246,6 +355,26 @@ ____FS_CODE_DEFS_____
 	#define SZDRIFTTOUV 7.0
 
 	#define nsin(x) (0.5 * sin(x) + 0.5)
+
+	vec2 RES = vec2(mapsizex / 8.0, mapsizez / 8.0);
+
+	vec4 bilinearTexture2D(sampler2D tex, vec2 res, vec2 uv)
+	{
+		vec2 st = uv * res - 0.5;
+
+		vec2 iuv = floor( st );
+		vec2 fuv = fract( st );
+
+		vec4 a = texture2D( tex, (iuv+vec2(0.5,0.5))/res );
+		vec4 b = texture2D( tex, (iuv+vec2(1.5,0.5))/res );
+		vec4 c = texture2D( tex, (iuv+vec2(0.5,1.5))/res );
+		vec4 d = texture2D( tex, (iuv+vec2(1.5,1.5))/res );
+
+		return mix(
+				mix( a, b, fuv.x),
+				mix( c, d, fuv.x), fuv.y
+				);
+	}
 
 	float hex(vec2 p, float width, float coreSize)
 	{
@@ -285,13 +414,14 @@ ____FS_CODE_DEFS_____
 
 	void main(void)
 	{
+		vec3 normal = normalize(modelPos.xyz);
 		vec2 uvMulS = vec2(1.0, 0.5) * uvMul;
 		vec2 uv = RadialCoords(normal) * uvMulS;
 
 		vec2 offset = vec2(0.0);
 
 		//offset += GetRippleCoord(uv, vec2(0.75, 0.5) * uvMulS, sizeDrift * SZDRIFTTOUV, 80.0, 15.0, timer);
-		offset += GetRippleCoord(uv, vec2(0.25 + 0.5 * float(!gl_FrontFacing), 0.5) * uvMulS, sizeDrift * SZDRIFTTOUV, 80.0, 15.0, timer);
+		//offset += GetRippleCoord(uv, vec2(0.25 + 0.5 * float(!gl_FrontFacing), 0.5) * uvMulS, sizeDrift * SZDRIFTTOUV, 80.0, 15.0, timer);
 
 		vec2 offset2 = vec2(0.0);
 
@@ -317,6 +447,13 @@ ____FS_CODE_DEFS_____
 			texel = vec4(0.0);
 
 		vec4 colorMultAdj = colorMult * (1.0 + length(offset2) * 50.0);
+
+		//float height = texture2D(heightMap, hmuv).r;
+		//float height = bilinearTexture2D(heightMap, RES, hmuv).r;
+		//height = max(height, 1.0);
+
+		//colorMultAdj *= 1.0 + (1.0 - smoothstep(0.0, 10.0, abs(height - worldPos.y))) * 10.0;
+
 		//float colorMultAdj = colorMult;
 		//vec4 color1M = color1 * colorMultAdj;
 		vec4 color2M = color2 * colorMultAdj;
@@ -325,8 +462,17 @@ ____FS_CODE_DEFS_____
 		vec4 color1TexM = color1Tex * colorMultAdj;
 
 		gl_FragColor = mix(color1TexM, color2M, opac);
+
+		//float height = texture2D(heightMap, hmuv).r;
+		float height = bilinearTexture2D(heightMap, RES, hmuv).r;
+		height = max(height, 1.0);
+
+		//colorMultAdj *= 1.0 + (1.0 - smoothstep(0.0, 10.0, abs(height - worldPos.y))) * 10.0;
+		gl_FragColor = mix(gl_FragColor, color1 * 2.0, 1.0 - smoothstep(0.0, 10.0, abs(height - worldPos.y)));
+
 		//gl_FragColor = mix(color1Tex, color2M, opac);
 		//gl_FragColor = texel;
+		//gl_FragColor = color2;
 	}
 ]]
 
@@ -355,8 +501,13 @@ function ShieldSphereColorHQParticle:Initialize()
 	shieldShader = gl.CreateShader({
 		vertex = vsCodeEff,
 		fragment = fsCodeEff,
+		uniform = {
+			mapsizex = Game.mapSizeX,
+			mapsizez = Game.mapSizeZ,
+		},
 		uniformInt = {
 			tex0 = 0,
+			heightMap = 1,
 		},
 	})
 
@@ -372,7 +523,11 @@ function ShieldSphereColorHQParticle:Initialize()
 	end
 
 	timerUniform = gl.GetUniformLocation(shieldShader, 'timer')
-	viewInvUniform = gl.GetUniformLocation(shieldShader, 'viewMatrixI')
+	--viewInvUniform = gl.GetUniformLocation(shieldShader, 'viewMatrixI')
+	viewUniform = gl.GetUniformLocation(shieldShader, 'viewMatrix')
+	modelUniform = gl.GetUniformLocation(shieldShader, 'modelMatrix')
+	projUniform = gl.GetUniformLocation(shieldShader, 'projectionMatrix')
+	normalUniform = gl.GetUniformLocation(shieldShader, 'normalMatrix')
 
 	methodUniform = gl.GetUniformLocation(shieldShader, 'method')
 

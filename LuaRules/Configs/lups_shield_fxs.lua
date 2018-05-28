@@ -7,7 +7,7 @@ local ShieldSphereBase = {
 	colormap2 = {{0.2, 1, 0.7, 0.0}, {0.7, 1, 0.2, 0.0}},
 --	drawBack = 0.7,
 	mix = {0.0, 0.0, 0.0, 0.25},
-	drawBackHQ = {1.0, 1.0, 1.0, 0.45},
+	drawBackHQ = {1.0, 1.0, 1.0, 0.3},
 	repeatEffect = true,
 	onActive = true,
 }
