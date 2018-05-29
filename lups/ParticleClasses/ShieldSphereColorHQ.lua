@@ -110,7 +110,10 @@ function ShieldSphereColorHQParticle:BeginDraw()
 
 	local gf = Spring.GetGameFrame()
 	gl.Uniform(timerUniform,	gf / PACE)
+
 	--gl.UniformMatrix(viewInvUniform, "viewinverse")
+	gl.UniformMatrix(projUniform, "projection")
+	gl.UniformMatrix(viewUniform, "view")	
 end
 
 function ShieldSphereColorHQParticle:EndDraw()
@@ -125,7 +128,18 @@ function ShieldSphereColorHQParticle:EndDraw()
 end
 
 function ShieldSphereColorHQParticle:Draw()
-	gl.UniformMatrix(projUniform, "projection")
+	
+	--local m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34, m41, m42, m43, m44 = Spring.GetUnitTransformMatrix(self.unit)
+
+	local x, y, z = Spring.GetUnitPosition(self.unit)
+	gl.UniformMatrix(modelUniform,
+									1, 0, 0, 0,
+									0, 1, 0, 0,
+									0, 0, 1, 0,
+									x, y, z, 1)
+									
+	--Spring.Echo("M\n", m11, m12, m13, m14, "\n", m21, m22, m23, m24, "\n", m31, m32, m33, m34, "\n", m41, m42, m43, m44)
+	--[[
 
 	local mv11, mv12, mv13, mv14, mv21, mv22, mv23, mv24, mv31, mv32, mv33, mv34, mv41, mv42, mv43, mv44 = gl.GetMatrixData(GL.MODELVIEW)
 	local mv = {
@@ -178,6 +192,8 @@ function ShieldSphereColorHQParticle:Draw()
 	gl.UniformMatrix(normalUniform,	nm[1][1], nm[1][2], nm[1][3],
 									nm[2][1], nm[2][2], nm[2][3],
 									nm[3][1], nm[3][2], nm[3][3])
+									
+	]]--
 
 	gl.Culling(GL.FRONT)
 	if not self.texture then
@@ -264,7 +280,7 @@ ____VS_CODE_DEFS_____
 	uniform mat4 modelMatrix;
 	uniform mat4 projectionMatrix;
 
-	uniform mat3 normalMatrix;
+	//uniform mat3 normalMatrix;
 
 	uniform float mapsizex, mapsizez;
 
@@ -300,8 +316,8 @@ ____VS_CODE_DEFS_____
 		//world position
 		worldPos = modelMatrix * modelPos;
 
-		//upper 3x3 part of revised ModelView matrix
-		vec3 normal = normalize(normalMatrix * gl_Normal);
+		//upper 3x3 part of revised ModelView matrix in case of Orthogonal Matrix (should be our case here)
+		vec3 normal = normalize(mat3(viewMatrix) * mat3(modelMatrix) * gl_Normal);
 
 		//view position
 		vec4 viewPos = viewMatrix * worldPos;
@@ -465,6 +481,7 @@ ____FS_CODE_DEFS_____
 
 		//float height = texture2D(heightMap, hmuv).r;
 		float height = bilinearTexture2D(heightMap, RES, hmuv).r;
+		//float height = 0.0;
 		height = max(height, 1.0);
 
 		//colorMultAdj *= 1.0 + (1.0 - smoothstep(0.0, 10.0, abs(height - worldPos.y))) * 10.0;
