@@ -298,8 +298,6 @@ ____VS_CODE_DEFS_____
 
 	void main()
 	{
-		gl_TexCoord[0] = gl_MultiTexCoord0;
-
 		float r = length(gl_Vertex.xyz);
 		float theta = acos(gl_Vertex.z / r);
 		float phi = atan(gl_Vertex.y, gl_Vertex.x);
@@ -444,8 +442,9 @@ ____FS_CODE_DEFS_____
 		for (int hitPointIdx = 0; hitPointIdx < MAX_POINTS; ++hitPointIdx) {
 			if (hitPointIdx < hitPointCount) {
 				vec3 impactPoint = vec3(hitPoints[5 * hitPointIdx + 0], hitPoints[5 * hitPointIdx + 1], hitPoints[5 * hitPointIdx + 2]);
-				vec3 impactPointAdj = (vec4(impactPoint, 1.0) * viewMatrixI).xyz;
-				vec2 impactPointUV = RadialCoords(impactPointAdj) * uvMulS;
+				//vec3 impactPointAdj = (vec4(impactPoint, 1.0) * viewMatrixI).xyz;
+				//vec2 impactPointUV = RadialCoords(impactPointAdj) * uvMulS;
+				vec2 impactPointUV = RadialCoords(impactPoint) * uvMulS;
 				float mag = hitPoints[5 * hitPointIdx + 3];
 				float aoe = hitPoints[5 * hitPointIdx + 4];
 				offset2 += GetRippleLinearFallOffCoord(uv, impactPointUV, mag, 100.0, -120.0, aoe, timer);
