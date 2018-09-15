@@ -173,10 +173,10 @@ local function CompileShader(shader, definitions, plugins)
                            -- since they aren't likely to lead to any change
 
     log("CUS shader log -----------------------------\n" .. errorLog)
-    log("Vertex -------------------------------------\n" .. (shader.vertex   or "nil"))
-    log("Fragment -----------------------------------\n" .. (shader.fragment or "nil"))
-    log("Geometry -----------------------------------\n" .. (shader.geometry or "nil"))
-    log("CUS end ------------------------------------")
+    --log("Vertex -------------------------------------\n" .. (shader.vertex   or "nil"))
+    --log("Fragment -----------------------------------\n" .. (shader.fragment or "nil"))
+    --log("Geometry -----------------------------------\n" .. (shader.geometry or "nil"))
+    --log("CUS end ------------------------------------")
   end
 
   shader.vertex   = shader.vertexOrig
@@ -633,9 +633,6 @@ function gadget:Initialize()
 
   --// load the materials config files
   local MATERIALS_DIR = "ModelMaterials/"
-  if not Spring.Utilities.IsCurrentVersionNewerThan(103, 0) then
-    MATERIALS_DIR = "ModelMaterials_103/"
-  end
   local unitMaterialDefs, featureMaterialDefs = _LoadMaterialConfigFiles(MATERIALS_DIR)
   --// process the materials (compile shaders, load textures, ...)
   _ProcessMaterials(unitRendering,    unitMaterialDefs)
