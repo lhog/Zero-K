@@ -17,6 +17,8 @@ local function DrawUnit(unitID, material, drawMode)
 				gl.Uniform(uniformData.location, uniformData.value)
 			end
 		end
+		local gf = Spring.GetGameFrame()
+		gl.UniformInt(gl.GetUniformLocation(curShader, "simFrame"), gf)
 	end
 end
 
@@ -73,7 +75,7 @@ local pbrMaterialValues = {
 
 	["iblMap.scale"] = function(pbr) return (pbr.iblMap or {}).scale or 1.0 end,
 	["iblMap.get"] = function(pbr) return (pbr.iblMap or {}).get or nil end,
-	["iblMap.lod"] = function(pbr) return (pbr.iblMap or {}).lod or nil end,
+	["iblMap.lod"] = function(pbr) return ((pbr.iblMap or {}).lod == nil and false) or pbr.iblMap.lod end,
 	["iblMap.gammaCorrection"] = function(pbr) return ((pbr.iblMap or {}).gammaCorrection == nil and false) or pbr.iblMap.gammaCorrection end,
 
 	["gammaCorrection"] = function(pbr) return ((pbr.gammaCorrection == nil) and true) or pbr.gammaCorrection end,
@@ -140,7 +142,11 @@ local function parsePbrMatParams(pbr)
 			elseif second == "hasTangents" and val then
 				define = "#define " .. camelToUnderline(second)
 			elseif second == "lod" and val then
-				define = "#define USE_TEX_LOD"
+				if valType == "boolean" then
+					define = "#define USE_TEX_LOD 2" --automatic definition of max LOD
+				else
+					define = "#define USE_TEX_LOD 1" --manual definition of max LOD
+				end
 			end
 
 			if second == "scale" or second == "strength" then
@@ -150,7 +156,7 @@ local function parsePbrMatParams(pbr)
 					value = val,
 					location = nil,
 				}
-			elseif second == "lod" then
+			elseif second == "lod" and valType == "number" then
 				uniform = {
 					name = first .. second:gsub("%l", string.upper),
 					isTable = (valType == "table"),

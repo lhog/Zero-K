@@ -112,12 +112,12 @@ return {
 
 		#ifdef GET_IBLMAP
 			uniform samplerCube reflectionEnvTex;
-			//uniform samplerCube specularEnvTex;			
-			#ifdef USE_TEX_LOD
+			//uniform samplerCube specularEnvTex;
+			#if (USE_TEX_LOD == 1) //manual LOD
 				uniform float iblMapLOD;
 			#endif
 		#endif
-		
+
 		uniform sampler2D brdfLUT;
 		uniform vec2 iblMapScale;
 
@@ -128,7 +128,7 @@ return {
 		uniform float roughnessMapScale;
 		uniform float metallicMapScale;
 
-		uniform float simFrame; //set by api_cus
+		uniform int simFrame; //set by api_cus
 		uniform vec4 teamColor; //set by engine
 
 		#line 20126
@@ -300,17 +300,22 @@ return {
 			return worldFragNormal;
 		}
 
-		
+
 		vec3 getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection)
 		{
-			
+
 			vec3 diffuse = vec3(iblMapScale.x);
 			vec3 specular = vec3(iblMapScale.y);
-			
+
 			#ifdef GET_IBLMAP
 				vec3 diffuseLight = texture(reflectionEnvTex, n).rgb;
 				#ifdef SRGB_IBLMAP
 					diffuseLight = fromSRGB(diffuseLight);
+				#endif
+
+				#if (USE_TEX_LOD == 2) // if USE_TEX_LOD == 1, then iblMapLOD is defined as a uniform
+					ivec2 reflectionEnvTexSize = textureSize(reflectionEnvTex, 0);
+					float iblMapLOD = log2(float(max(reflectionEnvTexSize.x, reflectionEnvTexSize.y)));
 				#endif
 
 				#ifdef USE_TEX_LOD
@@ -334,7 +339,7 @@ return {
 
 			return clamp(diffuse + specular, vec3(0.0), vec3(1.0));
 		}
-		
+
 
 		vec3 diffuseLambert(PBRInfo pbrInputs) {
 			return pbrInputs.diffuseColor / M_PI;
@@ -520,13 +525,14 @@ return {
 			#else
 				gl_FragColor = vec4(color, 1.0);
 			#endif
+
+//				#if (USE_TEX_LOD == 2) // if USE_TEX_LOD == 1, then iblMapLOD is defined as a uniform
+//					ivec2 reflectionEnvTexSize = textureSize(reflectionEnvTex, 0);
+//					float iblMapLOD = log2(float(max(reflectionEnvTexSize.x, reflectionEnvTexSize.y)));
+//				#endif
 			
-			//gl_FragColor = vec4( textureLod(specularEnvTex, n, 9.0).rgb * 10.0 + texture(reflectionEnvTex, n).rgb * 2.0, 1.0);
-			//gl_FragColor = vec4( textureLod(specularEnvTex, n, 9.0).rgb * 10.0, 0.0);
-			//gl_FragColor += vec4( texture(reflectionEnvTex, n).rgb * 2.0, 0.0);
-			//gl_FragColor.a = 1.0;
-			//gl_FragColor = vec4(getIBLContribution(pbrInputs, n, reflection), 1.0);
-			//gl_FragColor = vec4( textureLod(reflectionEnvTex, n, 9.0).rgb, 1.0);
+			//gl_FragColor = vec4( textureLod(reflectionEnvTex, n, iblMapLOD).rgb, 1.0);
+			//gl_FragColor = vec4( metallic, roughness, occlusion, 1.0);
 
 			%%FRAGMENT_POST_SHADING%%
 		}
