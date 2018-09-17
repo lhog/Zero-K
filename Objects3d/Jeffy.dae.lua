@@ -23,7 +23,7 @@ model = {
 			hasTangents = true, --you somehow must know if the import of the model puts tangents and bitangents to gl_MultiTexCoord[5,6]
 			scale = 1.0, -- scale for Red/X/tangent and Green/Y/bitangent parts of normal sampled from normalMapTex. Defaults to 1.0
 			get = "[1].rgb",
-			gammaCorrection = false, -- do sRGB to RGB in-shader translation. Defaults to false, as normals should be saved in linear RGB.
+			gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to false, as normals should be saved in linear RGB.
 		},
 		emissiveMap = {
 			scale = {1.0, 1.0, 1.0}, -- acts as a color if tex unit is unused or as a multiplier if tex unit is present. Defaults to vec3(1.0).
@@ -33,23 +33,23 @@ model = {
 		occlusionMap = {
 			strength = 1.0, --multiplier in case occlusionMap is present. Does NOT act as a texture stand-in
 			get = "[3].r",
-			gammaCorrection = false, -- do sRGB to RGB in-shader translation. Defaults to false, as ao should be saved in linear RGB.
+			gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to false, as ao should be saved in linear RGB.
 		},
 		roughnessMap = {
 			scale = 1.0, --acts as a multiplier or a base value (if get is nil)
 			get = "[3].g",
-			gammaCorrection = false, -- do sRGB to RGB in-shader translation. Defaults to false, as roughness should be saved in linear RGB.
+			gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to false, as roughness should be saved in linear RGB.
 		},
 		metallicMap = {
 			scale = 1.0, --acts as a multiplier or a base value (if get is nil)
 			get = "[3].b",
-			gammaCorrection = false, -- do sRGB to RGB in-shader translation. Defaults to false, as roughness should be saved in linear RGB.
+			gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to false, as roughness should be saved in linear RGB.
 		},
 		iblMap = {
 			scale = {0.9, 0.3}, --{diffuse, specular} IBL scale. Acts as a multiplier or a base value (if get is nil)
 			get = true, -- to generate GET_IBLMAP definition
 			lod = true, -- can be nil, a number, or true for auto
-			gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to false, as roughness should be saved in linear RGB.
+			gammaCorrection = false, -- do sRGB to RGB in-shader translation. Defaults to false, as roughness should be saved in linear RGB.
 		},
 		gammaCorrection = true, -- do gamma correction (RGB-->sRGB) on the final color.
 		texUnits = { -- substitute values
