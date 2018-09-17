@@ -25,6 +25,13 @@ model = {
 			get = "[1].rgb",
 			gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to false, as normals should be saved in linear RGB.
 		},
+		parallaxMap = { -- parallax occlusion mapping. Will be ignored if normalMap.hasTangents == false
+			fast = false, --always test if fast is good enough and only switch to "precise" if quality is bad. fast=true is simple parallax, fast=false is parallax occlusion mapping
+			scale = 0.01, --if you set this up and your model texturing (and everything else) looks off, try to divide scale by 10 and then find out the best value iteratively
+			--get = "[1].a", -- expects linear bump map as input
+			get = nil,
+			gammaCorrection = false, -- don't do. A is always linear
+		},
 		emissiveMap = {
 			scale = {1.0, 1.0, 1.0}, -- acts as a color if tex unit is unused or as a multiplier if tex unit is present. Defaults to vec3(1.0).
 			get = "[2].rgb",
@@ -55,7 +62,7 @@ model = {
 		texUnits = { -- substitute values
 			--["TEX0"] = "Jeffy_Diffuse+TeamColor.dds",
 			["TEX0"] = "Jeffy_Color.png",
-			["TEX1"] = "Jeffy_Normal_OpenGL.png",
+			["TEX1"] = "Jeffy_Normal_Bump1.png",
 			["TEX2"] = "Jeffy_Emissive.png",
 			--["TEX2"] = "Jeffy_Diffuse+TeamColor.dds",
 			["TEX3"] = "Jeffy_ORM.png",

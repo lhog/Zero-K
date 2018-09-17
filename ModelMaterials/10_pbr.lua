@@ -56,6 +56,11 @@ local pbrMaterialValues = {
 	["normalMap.get"] = function(pbr) return (pbr.normalMap or {}).get or nil end,
 	["normalMap.gammaCorrection"] = function(pbr) return ((pbr.normalMap or {}).gammaCorrection == nil and false) or pbr.normalMap.gammaCorrection end,
 	["normalMap.hasTangents"] = function(pbr) return ((pbr.normalMap or {}).hasTangents == nil and true) or pbr.normalMap.hasTangents end,
+	
+	["parallaxMap.scale"] = function(pbr) return (pbr.parallaxMap or {}).scale or 0.01 end,
+	["parallaxMap.get"] = function(pbr) return (pbr.parallaxMap or {}).get or nil end,
+	["parallaxMap.gammaCorrection"] = function(pbr) return ((pbr.parallaxMap or {}).gammaCorrection == nil and false) or pbr.parallaxMap.gammaCorrection end,
+	["parallaxMap.fast"] = function(pbr) return ((pbr.parallaxMap or {}).fast == nil and true) or pbr.parallaxMap.fast end,
 
 	["emissiveMap.scale"] = function(pbr) return (pbr.emissiveMap or {}).scale or {1.0, 1.0, 1.0} end,
 	["emissiveMap.get"] = function(pbr) return (pbr.emissiveMap or {}).get or nil end,
@@ -130,22 +135,30 @@ local function parsePbrMatParams(pbr)
 		if pntIdx then
 			local first  = string.sub(key, 1, pntIdx - 1)
 			local second = string.sub(key, pntIdx + 1)
-			Spring.Echo(key, first, second, val)
-			if second == "get" and val then
-				if valType == "string" then
-					define = "#define GET_" .. string.upper(first) .. " texels" .. val
-				elseif valType == "boolean" then
-					define = "#define GET_" .. string.upper(first)
-				end
-			elseif second == "gammaCorrection" and val then
-				define = "#define SRGB_" .. string.upper(first)
-			elseif second == "hasTangents" and val then
-				define = "#define " .. camelToUnderline(second)
-			elseif second == "lod" and val then
-				if valType == "boolean" then
-					define = "#define USE_TEX_LOD 2" --automatic definition of max LOD
-				else
-					define = "#define USE_TEX_LOD 1" --manual definition of max LOD
+			--Spring.Echo(key, first, second, val)
+			if first == "parallaxMap" and second == "get" and val then
+				local texUnitNum = string.match(val, "%[(%d-)%]")
+				local texChannel = string.match(val, ".(%a)")
+				define = "#define GET_" .. string.upper(first) .. string.format(" texture(tex%d, texCoord).%s", texUnitNum, texChannel)
+			else
+				if second == "get" and val then
+					if valType == "string" then
+						define = "#define GET_" .. string.upper(first) .. " texels" .. val
+					elseif valType == "boolean" then
+						define = "#define GET_" .. string.upper(first)
+					end
+				elseif second == "gammaCorrection" and val then
+					define = "#define SRGB_" .. string.upper(first)
+				elseif second == "hasTangents" and val then
+					define = "#define " .. camelToUnderline(second)
+				elseif second == "lod" and val then
+					if valType == "boolean" then
+						define = "#define USE_TEX_LOD 2" --automatic definition of max LOD
+					else
+						define = "#define USE_TEX_LOD 1" --manual definition of max LOD
+					end
+				elseif second == "fast" and val then
+					define = "#define " .. "FAST_PARALLAXMAP"
 				end
 			end
 

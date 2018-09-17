@@ -79,7 +79,6 @@ return {
 				shadowTexCoord.st = shadowTexCoord.st * (inversesqrt( abs(shadowTexCoord.st) + shadowParams.z) + shadowParams.w) + shadowParams.xy;
 			#endif
 
-			//cameraDir = worldPos - cameraPos;
 			cameraDir = cameraPos - worldPos;
 
 			// TODO: multiply by gl_TextureMatrix[0] ?
@@ -141,6 +140,7 @@ return {
 		uniform float occlusionMapStrength;
 		uniform float roughnessMapScale;
 		uniform float metallicMapScale;
+		uniform float parallaxMapScale;
 
 		#ifdef use_shadows
 			uniform sampler2DShadow shadowTex;
@@ -325,7 +325,6 @@ return {
 
 		vec3 getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection)
 		{
-
 			vec3 diffuse = vec3(iblMapScale.x);
 			vec3 specular = vec3(iblMapScale.y);
 
@@ -386,7 +385,7 @@ return {
 			return pbrInputs.roughness4 / (M_PI * f * f);
 		}
 
-		float GetShadowCoeff(vec4 shadowCoords) {
+		float getShadowCoeff(vec4 shadowCoords) {
 			#ifdef use_shadows
 				float coeff = textureProj(shadowTex, shadowCoords + vec4(0.0, 0.0, -0.00005, 0.0));
 				coeff  = (1.0 - coeff);
@@ -397,29 +396,86 @@ return {
 			#endif
 		}
 
+		#if defined(GET_PARALLAXMAP) && defined(HAS_TANGENTS)
+			#ifdef FAST_PARALLAXMAP
+				// https://learnopengl.com/code_viewer_gh.php?code=src/5.advanced_lighting/5.1.parallax_mapping/5.1.parallax_mapping.fs
+				// Simple parallax mapping
+				vec2 parallaxMapping(vec2 texC, vec3 tangentViewDir)
+				{
+					float height = GET_PARALLAXMAP;
+					return texC - tangentViewDir.xy * (height * parallaxMapScale);
+				}
+			#else
+				// https://learnopengl.com/code_viewer_gh.php?code=src/5.advanced_lighting/5.3.parallax_occlusion_mapping/5.3.parallax_mapping.fs
+				// Parallax occlusion mapping
+				vec2 parallaxMapping(vec2 texC, vec3 tangentViewDir)
+				{
+					// number of depth layers
+					const float minLayers = 8;
+					const float maxLayers = 32;
+					float numLayers = mix(maxLayers, minLayers, abs(dot(vec3(0.0, 0.0, 1.0), tangentViewDir)));
+					// calculate the size of each layer
+					float layerDepth = 1.0 / numLayers;
+					// depth of current layer
+					float currentLayerDepth = 0.0;
+					// the amount to shift the texture coordinates per layer (from vector P)
+					vec2 P = tangentViewDir.xy / tangentViewDir.z * parallaxMapScale;
+					vec2 deltaTexCoords = P / numLayers;
+
+					// get initial values
+					vec2  currentTexCoords     = texC;
+					float currentDepthMapValue = GET_PARALLAXMAP;
+
+					while(currentLayerDepth < currentDepthMapValue)
+					{
+						// shift texture coordinates along direction of P
+						currentTexCoords -= deltaTexCoords;
+						// get depthmap value at current texture coordinates
+						currentDepthMapValue = GET_PARALLAXMAP;
+						// get depth of next layer
+						currentLayerDepth += layerDepth;
+					}
+
+					// get texture coordinates before collision (reverse operations)
+					vec2 prevTexCoords = currentTexCoords + deltaTexCoords;
+
+					// get depth after and before collision for linear interpolation
+					float afterDepth  = currentDepthMapValue - currentLayerDepth;
+					float beforeDepth = GET_PARALLAXMAP - currentLayerDepth + layerDepth;
+
+					// interpolation of texture coordinates
+					float weight = afterDepth / (afterDepth - beforeDepth);
+					vec2 finalTexCoords = prevTexCoords * weight + currentTexCoords * (1.0 - weight);
+
+					return finalTexCoords;
+				}
+			#endif
+		#endif
+
+
 		%%FRAGMENT_GLOBAL_NAMESPACE%%
 
-		void fillTexelsArray() {
+		void fillTexelsArray(vec2 texC) {
 			#ifdef HAS_TEX0
-				texels[0] = texture(tex0, texCoord);
+				texels[0] = texture(tex0, texC);
 			#else
 				texels[0] = vec4(0.0);
 			#endif
 
 			#ifdef HAS_TEX1
-				texels[1] = texture(tex1, texCoord);
+				texels[1] = texture(tex1, texC);
 			#else
 				texels[1] = vec4(0.0);
 			#endif
 
 			#ifdef HAS_TEX2
-				texels[2] = texture(tex2, texCoord);
+				texels[2] = texture(tex2, texC);
 			#else
 				texels[2] = vec4(0.0);
 			#endif
 
 			#ifdef HAS_TEX3
-				texels[3] = texture(tex3, texCoord);
+				texels[3] = texture(tex3, texC);
 			#else
 				texels[3] = vec4(0.0);
 			#endif
@@ -428,7 +484,21 @@ return {
 		void main(void) {
 			%%FRAGMENT_PRE_SHADING%%
 
-			fillTexelsArray();
+			// Here we have chicken and egg problem in case TBN is calculated in frag shader. 
+			#if defined(GET_PARALLAXMAP) && defined(HAS_TANGENTS)
+				mat3 invWorldTBN = transpose(worldTBN);
+				vec3 tangentViewDir = normalize(invWorldTBN * cameraDir);
+
+				vec2 samplingTexCoord = parallaxMapping(texCoord, tangentViewDir);
+
+				bvec4 badTexCoords = bvec4(samplingTexCoord.x > 1.0, samplingTexCoord.y > 1.0, samplingTexCoord.x < 0.0, samplingTexCoord.y < 0.0);
+				if (any(badTexCoords))
+					discard;
+			#else
+				vec2 samplingTexCoord = texCoord;
+			#endif
+
+			fillTexelsArray(samplingTexCoord);
 
 			vec4 baseColor;
 			#ifdef GET_BASECOLORMAP
@@ -549,7 +619,7 @@ return {
 
 			color = mix(color, color * occlusion, occlusionMapStrength);
 
-			float shadow = GetShadowCoeff(shadowTexCoord + vec4(0.0, 0.0, -0.00005, 0.0));
+			float shadow = getShadowCoeff(shadowTexCoord + vec4(0.0, 0.0, -0.00005, 0.0));
 			color *= shadow;
 
 			//color = mix(color, teamColor.rgb, baseColor.a);
