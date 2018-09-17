@@ -6,11 +6,20 @@ return {
 		uniform mat4 camera;		//ViewMatrix (gl_ModelViewMatrix is ModelMatrix!)
 		uniform vec3 cameraPos;
 
+		//The api_custom_unit_shaders supplies this definition:
+		#ifdef use_shadows
+			uniform mat4 shadowMatrix;
+			uniform vec4 shadowParams;
+		#endif
+
 		out Data {
 			vec3 worldPos;
 			vec3 cameraDir;
 			vec2 texCoord;
-			vec2 shadowTexCoord;
+
+			#ifdef use_shadows
+				vec4 shadowTexCoord;
+			#endif
 
 			#ifdef GET_NORMALMAP
 				#ifdef HAS_TANGENTS
@@ -64,6 +73,11 @@ return {
 
 			vec4 worldPos4 = modelMatrix * modelPos;
 			worldPos = worldPos4.xyz / worldPos4.w; //doesn't make much sense (?)
+
+			#ifdef use_shadows
+				shadowTexCoord = shadowMatrix * worldPos4;
+				shadowTexCoord.st = shadowTexCoord.st * (inversesqrt( abs(shadowTexCoord.st) + shadowParams.z) + shadowParams.w) + shadowParams.xy;
+			#endif
 
 			//cameraDir = worldPos - cameraPos;
 			cameraDir = cameraPos - worldPos;
@@ -128,6 +142,11 @@ return {
 		uniform float roughnessMapScale;
 		uniform float metallicMapScale;
 
+		#ifdef use_shadows
+			uniform sampler2DShadow shadowTex;
+			uniform float shadowDensity;
+		#endif
+
 		uniform int simFrame; //set by api_cus
 		uniform vec4 teamColor; //set by engine
 
@@ -156,7 +175,10 @@ return {
 			vec3 worldPos;
 			vec3 cameraDir;
 			vec2 texCoord;
-			vec2 shadowTexCoord;
+
+			#ifdef use_shadows
+				vec4 shadowTexCoord;
+			#endif
 
 			#ifdef GET_NORMALMAP
 				#ifdef HAS_TANGENTS
@@ -364,6 +386,17 @@ return {
 			return pbrInputs.roughness4 / (M_PI * f * f);
 		}
 
+		float GetShadowCoeff(vec4 shadowCoords) {
+			#ifdef use_shadows
+				float coeff = textureProj(shadowTex, shadowCoords + vec4(0.0, 0.0, -0.00005, 0.0));
+				coeff  = (1.0 - coeff);
+				coeff *= shadowDensity;
+				return (1.0 - coeff);
+			#else
+				return 1.0;
+			#endif
+		}
+
 		%%FRAGMENT_GLOBAL_NAMESPACE%%
 
 		void fillTexelsArray() {
@@ -515,6 +548,10 @@ return {
 			color += getIBLContribution(pbrInputs, n, reflection);
 
 			color = mix(color, color * occlusion, occlusionMapStrength);
+
+			float shadow = GetShadowCoeff(shadowTexCoord + vec4(0.0, 0.0, -0.00005, 0.0));
+			color *= shadow;
+
 			//color = mix(color, teamColor.rgb, baseColor.a);
 			color += emissive;
 
@@ -530,7 +567,7 @@ return {
 //					ivec2 reflectionEnvTexSize = textureSize(reflectionEnvTex, 0);
 //					float iblMapLOD = log2(float(max(reflectionEnvTexSize.x, reflectionEnvTexSize.y)));
 //				#endif
-			
+
 			//gl_FragColor = vec4( textureLod(reflectionEnvTex, n, iblMapLOD).rgb, 1.0);
 			//gl_FragColor = vec4( metallic, roughness, occlusion, 1.0);
 
