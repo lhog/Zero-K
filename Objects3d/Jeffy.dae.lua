@@ -27,7 +27,7 @@ model = {
 		},
 		parallaxMap = { -- parallax occlusion mapping. Will be ignored if normalMap.hasTangents == false
 			fast = false, --always test if fast is good enough and only switch to "precise" if quality is bad. fast=true is simple parallax, fast=false is parallax occlusion mapping
-			limits = {0.01, 0.01}, --limits on how big texture coordinates offset parallax mapping can do. Offsets bigget than limits will be clamped
+			limits = true, -- Can be boolean or vec2() table. This limits how large texture coordinates offsets parallax mapping can do. Offsets bigget than limits will be clamped.
 			scale = 0.01, --if you set this up and your model texturing (and everything else) looks off, try to divide scale by 10 and then find out the best value iteratively
 			get = "[1].a", -- expects linear bump map as input
 			--get = nil,

@@ -142,7 +142,9 @@ local function parsePbrMatParams(pbr)
 				local texChannel = string.match(val, ".(%a)")
 				define = "#define GET_" .. string.upper(first) .. string.format(" texture(tex%d, texCoord).%s", texUnitNum, texChannel)
 			elseif first == "parallaxMap" and second == "limits" and val and valType == "table" then
-				define = "#define HAS_PARALLAXMAPLIMITS"
+				define = "#define PARALLAXMAP_LIMITS 2"
+			elseif first == "parallaxMap" and second == "limits" and val and valType == "boolean" then
+				define = "#define PARALLAXMAP_LIMITS 1"
 			else
 				if second == "get" and val then
 					if valType == "string" then

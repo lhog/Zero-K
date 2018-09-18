@@ -141,7 +141,7 @@ return {
 		uniform float roughnessMapScale;
 		uniform float metallicMapScale;
 		uniform float parallaxMapScale;
-		#ifdef HAS_PARALLAXMAPLIMITS
+		#if (PARALLAXMAP_LIMITS == 2) //manual limits
 			uniform vec2 parallaxMapLimits;
 		#endif
 
@@ -493,15 +493,15 @@ return {
 				vec3 tangentViewDir = normalize(invWorldTBN * cameraDir);
 
 				vec2 samplingTexCoord = parallaxMapping(texCoord, tangentViewDir);
-				#ifdef HAS_PARALLAXMAPLIMITS
+				#if (PARALLAXMAP_LIMITS == 1) //automated texture offset limits
 					vec2 texDiff = samplingTexCoord - texCoord;
-					#if 1
-						vec2 texMod = smoothstep(vec2(0.0), parallaxMapLimits, abs(texDiff));
-						samplingTexCoord = texCoord + sign(texDiff) * texMod * parallaxMapLimits;
-					#else
-						texDiff = clamp(texDiff, -parallaxMapLimits, parallaxMapLimits);
-						samplingTexCoord = texCoord + texDiff;
-					#endif
+					float bumpVal = GET_PARALLAXMAP * parallaxMapScale;
+					texDiff = clamp(texDiff, -vec2(bumpVal), vec2(bumpVal));
+					samplingTexCoord = texCoord + texDiff;
+				#elif (PARALLAXMAP_LIMITS == 2) //user-defined texture offset limits
+					vec2 texDiff = samplingTexCoord - texCoord;
+					texDiff = clamp(texDiff, -parallaxMapLimits, parallaxMapLimits);
+					samplingTexCoord = texCoord + texDiff;
 				#endif
 
 				bvec4 badTexCoords = bvec4(samplingTexCoord.x > 1.0, samplingTexCoord.y > 1.0, samplingTexCoord.x < 0.0, samplingTexCoord.y < 0.0);
