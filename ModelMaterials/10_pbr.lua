@@ -56,8 +56,9 @@ local pbrMaterialValues = {
 	["normalMap.get"] = function(pbr) return (pbr.normalMap or {}).get or nil end,
 	["normalMap.gammaCorrection"] = function(pbr) return ((pbr.normalMap or {}).gammaCorrection == nil and false) or pbr.normalMap.gammaCorrection end,
 	["normalMap.hasTangents"] = function(pbr) return ((pbr.normalMap or {}).hasTangents == nil and true) or pbr.normalMap.hasTangents end,
-	
+
 	["parallaxMap.scale"] = function(pbr) return (pbr.parallaxMap or {}).scale or 0.01 end,
+	["parallaxMap.limits"] = function(pbr) return (pbr.parallaxMap or {}).limits or nil end,
 	["parallaxMap.get"] = function(pbr) return (pbr.parallaxMap or {}).get or nil end,
 	["parallaxMap.gammaCorrection"] = function(pbr) return ((pbr.parallaxMap or {}).gammaCorrection == nil and false) or pbr.parallaxMap.gammaCorrection end,
 	["parallaxMap.fast"] = function(pbr) return ((pbr.parallaxMap or {}).fast == nil and true) or pbr.parallaxMap.fast end,
@@ -140,6 +141,8 @@ local function parsePbrMatParams(pbr)
 				local texUnitNum = string.match(val, "%[(%d-)%]")
 				local texChannel = string.match(val, ".(%a)")
 				define = "#define GET_" .. string.upper(first) .. string.format(" texture(tex%d, texCoord).%s", texUnitNum, texChannel)
+			elseif first == "parallaxMap" and second == "limits" and val and valType == "table" then
+				define = "#define HAS_PARALLAXMAPLIMITS"
 			else
 				if second == "get" and val then
 					if valType == "string" then
@@ -176,6 +179,13 @@ local function parsePbrMatParams(pbr)
 					value = val,
 					location = nil,
 				}
+			elseif second == "limits" and val and valType == "table" then
+				uniform = {
+					name = first .. second:gsub("^%l", string.upper),
+					isTable = (valType == "table"),
+					value = val,
+					location = nil,
+				}
 			end
 		else
 			if key == "texUnits" then
@@ -200,7 +210,12 @@ local function parsePbrMatParams(pbr)
 		if uniform then
 			table.insert(customStandardUniforms, uniform)
 		end
-		--Spring.Echo(key, val, define, uniform)
+		if define then
+			Spring.Echo(key, val, define)
+		end
+		if uniform then
+			Spring.Echo(key, val, uniform.name, uniform.isTable, uniform.value)
+		end
 	end
 	return shaderDefinitions, deferredDefinitions, customStandardUniforms, customDefferedUniforms
 end
@@ -210,7 +225,7 @@ local function getPbrMaterialIndex(pbr)
 	local propString = ""
 
 	local shaderDefinitions, deferredDefinitions = parsePbrMatParams(pbr)
-	
+
 	propString = propString .. "\nshaderDefinitions:\n"
 	propString = propString .. table.concat(shaderDefinitions, "\n")
 	propString = propString .. "\ndeferredDefinitions:\n"
