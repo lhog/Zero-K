@@ -107,6 +107,12 @@ return {
 			precision mediump float;
 		#endif
 
+		#define PARALLAXMAP_LIMITS_AUTO 1
+		#define PARALLAXMAP_LIMITS_MANUAL 2
+
+		#define IBL_TEX_LOD_AUTO 1
+		#define IBL_TEX_LOD_MANUAL 1
+
 		uniform vec3 sunPos;
 		uniform vec3 sunColor;
 
@@ -126,7 +132,7 @@ return {
 		#ifdef GET_IBLMAP
 			uniform samplerCube reflectionEnvTex;
 			//uniform samplerCube specularEnvTex;
-			#if (USE_TEX_LOD == 1) //manual LOD
+			#if (IBL_TEX_LOD == IBL_TEX_LOD_MANUAL) //manual LOD
 				uniform float iblMapLOD;
 			#endif
 		#endif
@@ -141,7 +147,7 @@ return {
 		uniform float roughnessMapScale;
 		uniform float metallicMapScale;
 		uniform float parallaxMapScale;
-		#if (PARALLAXMAP_LIMITS == 2) //manual limits
+		#if (PARALLAXMAP_LIMITS == PARALLAXMAP_LIMITS_MANUAL) //manual limits
 			uniform vec2 parallaxMapLimits;
 		#endif
 
@@ -337,12 +343,12 @@ return {
 					diffuseLight = fromSRGB(diffuseLight);
 				#endif
 
-				#if (USE_TEX_LOD == 2) // if USE_TEX_LOD == 1, then iblMapLOD is defined as a uniform
+				#if (IBL_TEX_LOD == IBL_TEX_LOD_AUTO) // if IBL_TEX_LOD == IBL_TEX_LOD_MANUAL, then iblMapLOD is defined as a uniform
 					ivec2 reflectionEnvTexSize = textureSize(reflectionEnvTex, 0);
 					float iblMapLOD = log2(float(max(reflectionEnvTexSize.x, reflectionEnvTexSize.y)));
 				#endif
 
-				#ifdef USE_TEX_LOD
+				#ifdef IBL_TEX_LOD
 					float lod = (pbrInputs.roughness * iblMapLOD);
 					vec3 specularLight = textureLod(reflectionEnvTex, reflection, lod).rgb;
 				#else
@@ -390,7 +396,7 @@ return {
 
 		float getShadowCoeff(vec4 shadowCoords) {
 			#ifdef use_shadows
-				float coeff = textureProj(shadowTex, shadowCoords + vec4(0.0, 0.0, -0.00005, 0.0));
+				float coeff = textureProj(shadowTex, shadowCoords + vec4(0.0, 0.0, -0.001, 0.0));
 				coeff  = (1.0 - coeff);
 				coeff *= shadowDensity;
 				return (1.0 - coeff);
@@ -400,13 +406,18 @@ return {
 		}
 
 		#if defined(GET_PARALLAXMAP) && defined(HAS_TANGENTS)
-			#ifdef FAST_PARALLAXMAP
+			#ifdef PARALLAXMAP_FAST
 				// https://learnopengl.com/code_viewer_gh.php?code=src/5.advanced_lighting/5.1.parallax_mapping/5.1.parallax_mapping.fs
 				// Simple parallax mapping
 				vec2 parallaxMapping(vec2 texC, vec3 tangentViewDir)
 				{
 					float height = GET_PARALLAXMAP;
-					return texC - tangentViewDir.xy * (height * parallaxMapScale);
+					#ifdef PARALLAXMAP_PERSPECTIVE //Normal Parallax Mapping
+						vec2 P = tangentViewDir.xy / tangentViewDir.z * height * parallaxMapScale;
+					#else //Parallax Mapping with Offset Limiting
+						vec2 P = tangentViewDir.xy * height * parallaxMapScale;
+					#endif
+					return texC - P;
 				}
 			#else
 				// https://learnopengl.com/code_viewer_gh.php?code=src/5.advanced_lighting/5.3.parallax_occlusion_mapping/5.3.parallax_mapping.fs
@@ -417,12 +428,19 @@ return {
 					const float minLayers = 8;
 					const float maxLayers = 32;
 					float numLayers = mix(maxLayers, minLayers, abs(dot(vec3(0.0, 0.0, 1.0), tangentViewDir)));
+
 					// calculate the size of each layer
 					float layerDepth = 1.0 / numLayers;
+
 					// depth of current layer
 					float currentLayerDepth = 0.0;
+
 					// the amount to shift the texture coordinates per layer (from vector P)
-					vec2 P = tangentViewDir.xy / tangentViewDir.z * parallaxMapScale;
+					#ifdef PARALLAXMAP_PERSPECTIVE //Normal Parallax Mapping
+						vec2 P = tangentViewDir.xy / tangentViewDir.z * parallaxMapScale;
+					#else //Parallax Mapping with Offset Limiting
+						vec2 P = tangentViewDir.xy * parallaxMapScale;
+					#endif
 					vec2 deltaTexCoords = P / numLayers;
 
 					// get initial values
@@ -493,12 +511,12 @@ return {
 				vec3 tangentViewDir = normalize(invWorldTBN * cameraDir);
 
 				vec2 samplingTexCoord = parallaxMapping(texCoord, tangentViewDir);
-				#if (PARALLAXMAP_LIMITS == 1) //automated texture offset limits
+				#if (PARALLAXMAP_LIMITS == PARALLAXMAP_LIMITS_AUTO) //automated texture offset limits
 					vec2 texDiff = samplingTexCoord - texCoord;
 					float bumpVal = GET_PARALLAXMAP * parallaxMapScale;
 					texDiff = clamp(texDiff, -vec2(bumpVal), vec2(bumpVal));
 					samplingTexCoord = texCoord + texDiff;
-				#elif (PARALLAXMAP_LIMITS == 2) //user-defined texture offset limits
+				#elif (PARALLAXMAP_LIMITS == PARALLAXMAP_LIMITS_MANUAL) //user-defined texture offset limits
 					vec2 texDiff = samplingTexCoord - texCoord;
 					texDiff = clamp(texDiff, -parallaxMapLimits, parallaxMapLimits);
 					samplingTexCoord = texCoord + texDiff;
@@ -632,7 +650,7 @@ return {
 
 			color = mix(color, color * occlusion, occlusionMapStrength);
 
-			float shadow = getShadowCoeff(shadowTexCoord + vec4(0.0, 0.0, -0.00005, 0.0));
+			float shadow = getShadowCoeff(shadowTexCoord);
 			color *= shadow;
 
 			//color = mix(color, teamColor.rgb, baseColor.a);
@@ -646,12 +664,6 @@ return {
 				gl_FragColor = vec4(color, 1.0);
 			#endif
 
-//				#if (USE_TEX_LOD == 2) // if USE_TEX_LOD == 1, then iblMapLOD is defined as a uniform
-//					ivec2 reflectionEnvTexSize = textureSize(reflectionEnvTex, 0);
-//					float iblMapLOD = log2(float(max(reflectionEnvTexSize.x, reflectionEnvTexSize.y)));
-//				#endif
-
-			//gl_FragColor = vec4( textureLod(reflectionEnvTex, n, iblMapLOD).rgb, 1.0);
 			//gl_FragColor = vec4( metallic, roughness, occlusion, 1.0);
 
 			%%FRAGMENT_POST_SHADING%%

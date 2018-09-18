@@ -57,11 +57,12 @@ local pbrMaterialValues = {
 	["normalMap.gammaCorrection"] = function(pbr) return ((pbr.normalMap or {}).gammaCorrection == nil and false) or pbr.normalMap.gammaCorrection end,
 	["normalMap.hasTangents"] = function(pbr) return ((pbr.normalMap or {}).hasTangents == nil and true) or pbr.normalMap.hasTangents end,
 
-	["parallaxMap.scale"] = function(pbr) return (pbr.parallaxMap or {}).scale or 0.01 end,
+	["parallaxMap.fast"] = function(pbr) return ((pbr.parallaxMap or {}).fast == nil and true) or pbr.parallaxMap.fast end,
+	["parallaxMap.perspective"] = function(pbr) return ((pbr.parallaxMap or {}).perspective == nil and false) or pbr.parallaxMap.perspective end,
 	["parallaxMap.limits"] = function(pbr) return (pbr.parallaxMap or {}).limits or nil end,
+	["parallaxMap.scale"] = function(pbr) return (pbr.parallaxMap or {}).scale or 0.01 end,
 	["parallaxMap.get"] = function(pbr) return (pbr.parallaxMap or {}).get or nil end,
 	["parallaxMap.gammaCorrection"] = function(pbr) return ((pbr.parallaxMap or {}).gammaCorrection == nil and false) or pbr.parallaxMap.gammaCorrection end,
-	["parallaxMap.fast"] = function(pbr) return ((pbr.parallaxMap or {}).fast == nil and true) or pbr.parallaxMap.fast end,
 
 	["emissiveMap.scale"] = function(pbr) return (pbr.emissiveMap or {}).scale or {1.0, 1.0, 1.0} end,
 	["emissiveMap.get"] = function(pbr) return (pbr.emissiveMap or {}).get or nil end,
@@ -142,9 +143,9 @@ local function parsePbrMatParams(pbr)
 				local texChannel = string.match(val, ".(%a)")
 				define = "#define GET_" .. string.upper(first) .. string.format(" texture(tex%d, texCoord).%s", texUnitNum, texChannel)
 			elseif first == "parallaxMap" and second == "limits" and val and valType == "table" then
-				define = "#define PARALLAXMAP_LIMITS 2"
+				define = "#define PARALLAXMAP_LIMITS PARALLAXMAP_LIMITS_MANUAL"
 			elseif first == "parallaxMap" and second == "limits" and val and valType == "boolean" then
-				define = "#define PARALLAXMAP_LIMITS 1"
+				define = "#define PARALLAXMAP_LIMITS PARALLAXMAP_LIMITS_AUTO"
 			else
 				if second == "get" and val then
 					if valType == "string" then
@@ -158,12 +159,14 @@ local function parsePbrMatParams(pbr)
 					define = "#define " .. camelToUnderline(second)
 				elseif second == "lod" and val then
 					if valType == "boolean" then
-						define = "#define USE_TEX_LOD 2" --automatic definition of max LOD
+						define = "#define IBL_TEX_LOD IBL_TEX_LOD_AUTO" --automatic definition of max LOD
 					else
-						define = "#define USE_TEX_LOD 1" --manual definition of max LOD
+						define = "#define IBL_TEX_LOD IBL_TEX_LOD_MANUAL" --manual definition of max LOD
 					end
 				elseif second == "fast" and val then
-					define = "#define " .. "FAST_PARALLAXMAP"
+					define = "#define " .. "PARALLAXMAP_FAST"
+				elseif second == "perspective" and val then
+					define = "#define " .. "PARALLAXMAP_PERSPECTIVE"
 				end
 			end
 
