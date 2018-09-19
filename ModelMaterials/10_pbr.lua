@@ -67,7 +67,7 @@ local pbrMaterialValues = {
 
 	["normalMap.scale"] = function(pbr) return (pbr.normalMap or {}).scale or 1.0 end,
 	["normalMap.get"] = function(pbr) return (pbr.normalMap or {}).get or nil end,
-	["normalMap.gammaCorrection"] = function(pbr) return ((pbr.normalMap or {}).gammaCorrection == nil and false) or pbr.normalMap.gammaCorrection end,
+	["normalMap.gammaCorrection"] = function(pbr) return ((pbr.normalMap or {}).gammaCorrection == nil and true) or pbr.normalMap.gammaCorrection end,
 	["normalMap.hasTangents"] = function(pbr) return ((pbr.normalMap or {}).hasTangents == nil and true) or pbr.normalMap.hasTangents end,
 
 	["parallaxMap.fast"] = function(pbr) return ((pbr.parallaxMap or {}).fast == nil and true) or pbr.parallaxMap.fast end,
@@ -223,9 +223,10 @@ local function parsePbrMatParams(pbr)
 			end
 		else
 			if key == "texUnits" then
-				for tu, tfile in pairs(val) do
-					local newFN = "unittextures/" .. tfile
-					if VFS.FileExists(newFN) then
+				for tu, fileSpec in pairs(val) do
+					local fileName = string.gsub(fileSpec, ":.-:", "")
+					local newFilePath = "unittextures/" .. fileName
+					if VFS.FileExists(newFilePath) then
 						table.insert(shaderDefinitions, "#define HAS_" .. tu)
 					end
 				end

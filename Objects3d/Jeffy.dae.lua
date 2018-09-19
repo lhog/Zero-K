@@ -8,7 +8,7 @@ model = {
 	midpos = {0, 0, 0},
 	--rotAxisSigns = {-1, -1, -1}
 	pbr = {
-		flipUV = false, --flip second component of UV map. False is for DDS, True is for everything else.
+		flipUV = false, --flip second component of UV map. False is for DDS, True is for everything else. For now keep everything either in DDS or in PNG/TGA
 		fastGamma = true, --default is false i.e. more precise method
 		fastDiffuse = true, --Lambert(true) or Burley(false)
 		tbnReortho = true, -- Re-orthogonalize TBN matrix using Gram-Schmidt process. Might behave differently depending on "hasTangents". Default is true.
@@ -23,8 +23,8 @@ model = {
 		normalMap = {
 			hasTangents = true, --you somehow must know if the import of the model puts tangents and bitangents to gl_MultiTexCoord[5,6]
 			scale = 1.0, -- scale for Red/X/tangent and Green/Y/bitangent parts of normal sampled from normalMapTex. Defaults to 1.0
-			get = "[1].rgb",
-			gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to false, as normals should be saved in linear RGB.
+			get = "[1].rgb", --If you use DDS and see some weird moar/acne like artifacts, use uncompressed DDS instead.
+			gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to true, because normals are stored just as a regular image. If you don't see right reflections, try to flip this value
 		},
 		parallaxMap = { -- parallax occlusion mapping. Will be ignored if normalMap.hasTangents == false
 			fast = false, --always test if fast is good enough and only switch to "precise" if quality is bad. fast=true is simple parallax, fast=false is parallax occlusion mapping
@@ -68,7 +68,7 @@ model = {
 		texUnits = { -- substitute values
 			--["TEX0"] = "Jeffy_Diffuse+TeamColor.dds",
 			["TEX0"] = "Jeffy_DiffuseTeamColor1024x1024.dds",
-			["TEX1"] = "Jeffy_NormalHeight_1k_uc.dds",
+			["TEX1"] = ":l:Jeffy_NormalHeight_1k_uc.dds", --don't mipmap normals file
 			["TEX2"] = "Jeffy_Emissive512x512.dds",
 			--["TEX2"] = "Jeffy_Diffuse+TeamColor.dds",
 			["TEX3"] = "Jeffy_ORM_EMGS_1k.dds",
