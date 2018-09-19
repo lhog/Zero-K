@@ -41,6 +41,19 @@ function myHash(str)
 	return hash
 end
 
+local function getNumberOfChannels(val)
+	if not val then
+		return nil
+	end
+	local texUnitNum = string.match(val, "%[(%d-)%]")
+	if texUnitNum then
+		local texChannel = string.match(val, "%.(%a+)")
+		if texChannel then
+			return #texChannel
+		end
+	end
+	return nil
+end
 
 local pbrMaterialValues = {
 	["flipUV"] = function(pbr) return ((pbr.flipUV == nil) and true) or pbr.flipUV end,
@@ -64,7 +77,7 @@ local pbrMaterialValues = {
 	["parallaxMap.get"] = function(pbr) return (pbr.parallaxMap or {}).get or nil end,
 	["parallaxMap.gammaCorrection"] = function(pbr) return ((pbr.parallaxMap or {}).gammaCorrection == nil and false) or pbr.parallaxMap.gammaCorrection end,
 
-	["emissiveMap.scale"] = function(pbr) return (pbr.emissiveMap or {}).scale or {1.0, 1.0, 1.0} end,
+	["emissiveMap.scale"] = function(pbr) return (pbr.emissiveMap or {}).scale or ((getNumberOfChannels(pbrMaterialValues["emissiveMap.get"](pbr)) == 1 and 1.0) or {1.0, 1.0, 1.0}) end,
 	["emissiveMap.get"] = function(pbr) return (pbr.emissiveMap or {}).get or nil end,
 	["emissiveMap.gammaCorrection"] = function(pbr) return ((pbr.emissiveMap or {}).gammaCorrection == nil and true) or pbr.emissiveMap.gammaCorrection end,
 
@@ -113,6 +126,13 @@ local function parseNewMatTexUnits(pbr)
 	return boundTexUnits
 end
 
+function tableConcat(dest, source)
+    for i, data in ipairs(source) do
+        table.insert(dest, data)
+    end
+    return dest
+end
+
 local function parsePbrMatParams(pbr)
 	local shaderDefinitions = {
 		"#version 150 compatibility",
@@ -131,7 +151,7 @@ local function parsePbrMatParams(pbr)
 		local valType = type(val)
 		local pntIdx = string.find(key, "%.")
 
-		local define
+		local define = {}
 		local uniform
 
 		if pntIdx then
@@ -140,33 +160,42 @@ local function parsePbrMatParams(pbr)
 			--Spring.Echo(key, first, second, val)
 			if first == "parallaxMap" and second == "get" and val then
 				local texUnitNum = string.match(val, "%[(%d-)%]")
-				local texChannel = string.match(val, ".(%a)")
-				define = "#define GET_" .. string.upper(first) .. string.format(" texture(tex%d, texCoord).%s", texUnitNum, texChannel)
+				local texChannel = string.match(val, "%.(%a)")
+				table.insert(define, "#define GET_" .. string.upper(first) .. string.format(" texture(tex%d, texCoord).%s", texUnitNum, texChannel))
 			elseif first == "parallaxMap" and second == "limits" and val and valType == "table" then
-				define = "#define PARALLAXMAP_LIMITS PARALLAXMAP_LIMITS_MANUAL"
+				table.insert(define, "#define PARALLAXMAP_LIMITS PARALLAXMAP_LIMITS_MANUAL")
 			elseif first == "parallaxMap" and second == "limits" and val and valType == "boolean" then
-				define = "#define PARALLAXMAP_LIMITS PARALLAXMAP_LIMITS_AUTO"
+				table.insert(define, "#define PARALLAXMAP_LIMITS PARALLAXMAP_LIMITS_AUTO")
 			else
 				if second == "get" and val then
-					if valType == "string" then
-						define = "#define GET_" .. string.upper(first) .. " texels" .. val
+					if first == "emissiveMap" then
+						local numCh = getNumberOfChannels(pbrMaterialValues["emissiveMap.get"](pbr))
+						if numCh and numCh == 1 then
+							table.insert(define, "#define EMISSIVEMAP_TYPE EMISSIVEMAP_TYPE_MULT")
+							table.insert(define, "#define GET_" .. string.upper(first) .. " texels" .. val)
+						elseif numCh and numCh > 1 then
+							table.insert(define, "#define EMISSIVEMAP_TYPE EMISSIVEMAP_TYPE_VAL")
+							table.insert(define, "#define GET_" .. string.upper(first) .. " texels" .. val)
+						end
+					elseif valType == "string" then
+						table.insert(define, "#define GET_" .. string.upper(first) .. " texels" .. val)
 					elseif valType == "boolean" then
-						define = "#define GET_" .. string.upper(first)
+						table.insert(define, "#define GET_" .. string.upper(first))
 					end
 				elseif second == "gammaCorrection" and val then
-					define = "#define SRGB_" .. string.upper(first)
+					table.insert(define, "#define SRGB_" .. string.upper(first))
 				elseif second == "hasTangents" and val then
-					define = "#define " .. camelToUnderline(second)
+					table.insert(define, "#define " .. camelToUnderline(second))
 				elseif second == "lod" and val then
 					if valType == "boolean" then
-						define = "#define IBL_TEX_LOD IBL_TEX_LOD_AUTO" --automatic definition of max LOD
+						table.insert(define, "#define IBL_TEX_LOD IBL_TEX_LOD_AUTO") --automatic definition of max LOD
 					else
-						define = "#define IBL_TEX_LOD IBL_TEX_LOD_MANUAL" --manual definition of max LOD
+						table.insert(define, "#define IBL_TEX_LOD IBL_TEX_LOD_MANUAL") --manual definition of max LOD
 					end
 				elseif second == "fast" and val then
-					define = "#define " .. "PARALLAXMAP_FAST"
+					table.insert(define, "#define " .. "PARALLAXMAP_FAST")
 				elseif second == "perspective" and val then
-					define = "#define " .. "PARALLAXMAP_PERSPECTIVE"
+					table.insert(define, "#define " .. "PARALLAXMAP_PERSPECTIVE")
 				end
 			end
 
@@ -202,14 +231,14 @@ local function parsePbrMatParams(pbr)
 				end
 			else
 				if valType == "boolean" and val then
-					define = "#define " .. camelToUnderline(key)
+					table.insert(define, "#define " .. camelToUnderline(key))
 				elseif valType == "string" then
-					define = "#define "..string.upper(key .. "_" .. val)
+					table.insert(define, "#define "..string.upper(key .. "_" .. val))
 				end
 			end
 		end
 		if define then
-			table.insert(shaderDefinitions, define)
+			tableConcat(shaderDefinitions, define)
 		end
 
 		if uniform then

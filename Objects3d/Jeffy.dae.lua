@@ -2,14 +2,15 @@ model = {
 	--radius = 25.0,
 	--height = 40,
 	--tex1 = "Jeffy_Diffuse+TeamColor.dds",
-	tex1 = "Jeffy_Color.png",
+	tex1 = "Jeffy_Color512x512.png",
 	--tex2 = "armtech_tex2.dds",
 	--tex2 = "armtech_tex2.dds",
 	midpos = {0, 0, 0},
 	--rotAxisSigns = {-1, -1, -1}
 	pbr = {
-		flipUV = true, --flip second component of UV map
+		flipUV = false, --flip second component of UV map. False is for DDS, True is for everything else.
 		fastGamma = true, --default is false i.e. more precise method
+		fastDiffuse = true, --Lambert(true) or Burley(false)
 		tbnReortho = true, -- Re-orthogonalize TBN matrix using Gram-Schmidt process. Might behave differently depending on "hasTangents". Default is true.
 		pbrWorkflow = "metallic", -- either "metallic" or "specular". "specular" is not yet implemented
 		-- PBR shader will sample a certain number of supplied textures.
@@ -35,9 +36,12 @@ model = {
 			gammaCorrection = false, -- don't do. A is always linear
 		},
 		emissiveMap = {
-			scale = {1.0, 1.0, 1.0}, -- acts as a color if tex unit is unused or as a multiplier if tex unit is present. Defaults to vec3(1.0).
-			get = "[2].rgb",
-			gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to true.
+			--scale = {1.0, 1.0, 1.0}, -- acts as a color if tex unit is unused or as a multiplier if tex unit is present. Can be a single channel, in that case it acts as a multipier to baseColor Defaults to vec3(1.0).
+			scale = 2.5,
+			--get = "[2].rgb", --get can be RGB
+			get = "[3].a", --or get can be single channel. I
+			--gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to true.
+			gammaCorrection = false,-- don't do. A is always linear
 		},
 		occlusionMap = {
 			strength = 1.0, --multiplier in case occlusionMap is present. Does NOT act as a texture stand-in
@@ -63,11 +67,11 @@ model = {
 		gammaCorrection = true, -- do gamma correction (RGB-->sRGB) on the final color.
 		texUnits = { -- substitute values
 			--["TEX0"] = "Jeffy_Diffuse+TeamColor.dds",
-			["TEX0"] = "Jeffy_Color.png",
-			["TEX1"] = "Jeffy_Normal_Bump1.png",
-			["TEX2"] = "Jeffy_Emissive.png",
+			["TEX0"] = "Jeffy_DiffuseTeamColor1024x1024.dds",
+			["TEX1"] = "Jeffy_NormalHeight_1k_uc.dds",
+			["TEX2"] = "Jeffy_Emissive512x512.dds",
 			--["TEX2"] = "Jeffy_Diffuse+TeamColor.dds",
-			["TEX3"] = "Jeffy_ORM.png",
+			["TEX3"] = "Jeffy_ORM_EMGS_1k.dds",
 			["BRDF"] = "brdflutTex.png"
 		}
 	},

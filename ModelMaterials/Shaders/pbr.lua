@@ -111,7 +111,10 @@ return {
 		#define PARALLAXMAP_LIMITS_MANUAL 2
 
 		#define IBL_TEX_LOD_AUTO 1
-		#define IBL_TEX_LOD_MANUAL 1
+		#define IBL_TEX_LOD_MANUAL 2
+
+		#define EMISSIVEMAP_TYPE_VAL 1
+		#define EMISSIVEMAP_TYPE_MULT 2
 
 		uniform vec3 sunPos;
 		uniform vec3 sunColor;
@@ -142,7 +145,11 @@ return {
 
 		uniform vec4 baseColorMapScale;
 		uniform float normalMapScale;
-		uniform vec3 emissiveMapScale;
+		#if EMISSIVEMAP_TYPE == EMISSIVEMAP_TYPE_VAL
+			uniform vec3 emissiveMapScale;
+		#elif EMISSIVEMAP_TYPE == EMISSIVEMAP_TYPE_MULT
+			uniform float emissiveMapScale;
+		#endif
 		uniform float occlusionMapStrength;
 		uniform float roughnessMapScale;
 		uniform float metallicMapScale;
@@ -502,6 +509,17 @@ return {
 			#endif
 		}
 
+		vec2 softsaturate(in vec2 x, in vec2 lim, in float linPercent) {
+			vec2 xN = abs(x / lim);
+			vec2 linCut = vec2(linPercent) * abs(lim);
+			vec2 k = log( (-linCut - vec2(1.0)) / (linCut - vec2(1.0)) ) / linCut;
+			vec2 st = step(linCut, xN);
+
+			//linear till linCut, logistic curve after
+			vec2 sat = (vec2(1.0) - st) * xN + st * vec2(2.0) / (vec2(1.0) + exp(-k * xN)) - vec2(1.0);
+			return x * sat;
+		}
+
 		void main(void) {
 			%%FRAGMENT_PRE_SHADING%%
 
@@ -514,11 +532,19 @@ return {
 				#if (PARALLAXMAP_LIMITS == PARALLAXMAP_LIMITS_AUTO) //automated texture offset limits
 					vec2 texDiff = samplingTexCoord - texCoord;
 					float bumpVal = GET_PARALLAXMAP * parallaxMapScale;
-					texDiff = clamp(texDiff, -vec2(bumpVal), vec2(bumpVal));
+					#if 0 // fast
+						texDiff = clamp(texDiff, -vec2(bumpVal), vec2(bumpVal));
+					#else // nice
+						texDiff = softsaturate(texDiff, vec2(bumpVal), 0.8);
+					#endif
 					samplingTexCoord = texCoord + texDiff;
 				#elif (PARALLAXMAP_LIMITS == PARALLAXMAP_LIMITS_MANUAL) //user-defined texture offset limits
 					vec2 texDiff = samplingTexCoord - texCoord;
-					texDiff = clamp(texDiff, -parallaxMapLimits, parallaxMapLimits);
+					#if 0 // fast
+						texDiff = clamp(texDiff, -parallaxMapLimits, parallaxMapLimits);
+					#else // nice
+						texDiff = softsaturate(texDiff, parallaxMapLimits, 0.8);
+					#endif
 					samplingTexCoord = texCoord + texDiff;
 				#endif
 
@@ -544,13 +570,25 @@ return {
 
 			vec3 emissive;
 			#ifdef GET_EMISSIVEMAP
-				emissive = GET_EMISSIVEMAP;
-				#ifdef SRGB_EMISSIVEMAP
-					emissive = fromSRGB(emissive);
+				#if EMISSIVEMAP_TYPE == EMISSIVEMAP_TYPE_VAL
+					vec3 emissiveRaw = GET_EMISSIVEMAP;
+				#elif EMISSIVEMAP_TYPE == EMISSIVEMAP_TYPE_MULT
+					float emissiveRaw = GET_EMISSIVEMAP;
 				#endif
-				emissive *= emissiveMapScale;
+				#ifdef SRGB_EMISSIVEMAP
+					emissiveRaw = fromSRGB(emissiveRaw);
+				#endif
+				#if EMISSIVEMAP_TYPE == EMISSIVEMAP_TYPE_VAL
+					emissive = emissiveRaw * emissiveMapScale;
+				#elif EMISSIVEMAP_TYPE == EMISSIVEMAP_TYPE_MULT
+					emissive = baseColor.rgb * vec3(emissiveRaw * emissiveMapScale);
+				#endif
 			#else
-				emissive = emissiveMapScale;
+				#if EMISSIVEMAP_TYPE == EMISSIVEMAP_TYPE_VAL
+					emissive = emissiveMapScale;
+				#elif EMISSIVEMAP_TYPE == EMISSIVEMAP_TYPE_MULT
+					emissive = vec3(emissiveMapScale);
+				#endif
 			#endif
 
 			float occlusion;
@@ -653,7 +691,7 @@ return {
 			float shadow = getShadowCoeff(shadowTexCoord);
 			color *= shadow;
 
-			//color = mix(color, teamColor.rgb, baseColor.a);
+			color = mix(color, teamColor.rgb, baseColor.a);
 			color += emissive;
 
 			float alpha = 1.0;
@@ -665,6 +703,11 @@ return {
 			#endif
 
 			//gl_FragColor = vec4( metallic, roughness, occlusion, 1.0);
+			//gl_FragColor = vec4(tangentViewDir, 1.0);
+			//gl_FragColor = vec4(baseColor.rgb, 1.0);
+			//gl_FragColor = vec4(emissive, 1.0);
+			//gl_FragColor = vec4(baseColor.rgb, 1.0);
+			//gl_FragColor = vec4(step(vec3(0.55, 0.29, 0.9), baseColor.rgb * emissiveRaw), 1.0);
 
 			%%FRAGMENT_POST_SHADING%%
 		}
