@@ -30,7 +30,7 @@ model = {
 			fast = false, --always test if fast is good enough and only switch to "precise" if quality is bad. fast=true is simple parallax, fast=false is parallax occlusion mapping
 			perspective = false, --whether to divide tangentViewDir.xy by tangentViewDir.z or not. A matter of personal preference. Check both.
 			limits = false, -- Can be boolean or vec2() table. This limits how large texture coordinates offsets parallax mapping can do. Offsets bigget than limits will be clamped.
-			scale = 0.01, --if you set this up and your model texturing (and everything else) looks off, try to divide scale by 10 and then find out the best value iteratively
+			scale = 0.02, --if you set this up and your model texturing (and everything else) looks off, try to divide scale by 10 and then find out the best value iteratively
 			get = "[1].a", -- expects linear bump map as input
 			--get = nil,
 			gammaCorrection = false, -- don't do. A is always linear
@@ -59,7 +59,7 @@ model = {
 			gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to false, as roughness should be saved in linear RGB.
 		},
 		iblMap = {
-			scale = {0.9, 0.3}, --{diffuse, specular} IBL scale. Acts as a multiplier or a base value (if get is nil)
+			scale = {1.0, 1.0}, --{diffuse, specular} IBL scale. Acts as a multiplier or a base value (if get is nil)
 			get = true, -- to generate GET_IBLMAP definition
 			lod = true, -- can be nil, a number, or true for auto
 			gammaCorrection = false, -- do sRGB to RGB in-shader translation. Defaults to false, as roughness should be saved in linear RGB.
@@ -67,7 +67,7 @@ model = {
 		gammaCorrection = true, -- do gamma correction (RGB-->sRGB) on the final color.
 		texUnits = { -- substitute values
 			["TEX0"] = "Jeffy_DiffuseTeamColor1024x1024.dds",
-			["TEX1"] = ":l:Jeffy_NormalHeight_1k_uc.dds", --don't mipmap normals file
+			["TEX1"] = "Jeffy_NormalHeight_1k_uc.dds",
 			["TEX2"] = "Jeffy_Emissive512x512.dds",
 			["TEX3"] = "Jeffy_ORM_EMGS_1k.dds",
 			["BRDF"] = "brdflutTex.png"

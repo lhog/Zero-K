@@ -116,6 +116,27 @@ return {
 		#define EMISSIVEMAP_TYPE_VAL 1
 		#define EMISSIVEMAP_TYPE_MULT 2
 
+		#define DEBUG_BASECOLOR 1
+		#define DEBUG_WORLDNORMALS 2
+		#define DEBUG_VIEWNORMALS 3
+		#define DEBUG_TANGENTNORMALS 4
+		#define DEBUG_TANGENTVIEWDIR 4
+		#define DEBUG_PARALLAXSHIFT 6
+		#define DEBUG_DIFFUSECOLOR 7
+		#define DEBUG_SPECULARCOLOR 8
+		#define DEBUG_EMISSIONCOLOR 9
+		#define DEBUG_TEAMCOLOR 10
+		#define DEBUG_OCCLUSION 11
+		#define DEBUG_ROUGHNESS 12
+		#define DEBUG_METALLIC 13
+		#define DEBUG_REFLECTIONDIR 14
+		#define DEBUG_SPECWORLDREFLECTION 15
+		#define DEBUG_SPECVIEWREFLECTION 16
+		#define DEBUG_DIFFUSEWORLDREFLECTION 17
+		#define DEBUG_IBLSPECULAR 18
+		#define DEBUG_IBLDIFFUSE 19
+		#define DEBUG_SHADOW 20
+
 		uniform vec3 sunPos;
 		uniform vec3 sunColor;
 
@@ -139,6 +160,8 @@ return {
 				uniform float iblMapLOD;
 			#endif
 		#endif
+
+		uniform mat4 camera;
 
 		uniform sampler2D brdfLUT;
 		uniform vec2 iblMapScale;
@@ -339,15 +362,19 @@ return {
 		}
 
 
-		vec3 getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection)
+		vec3 getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection, out vec3 diffuse, out vec3 specular)
 		{
-			vec3 diffuse = vec3(iblMapScale.x);
-			vec3 specular = vec3(iblMapScale.y);
+			diffuse = vec3(iblMapScale.x);
+			specular = vec3(iblMapScale.y);
 
 			#ifdef GET_IBLMAP
-				vec3 diffuseLight = texture(diffuseEnvTex, n).rgb;
-				#ifdef SRGB_IBLMAP
-					diffuseLight = fromSRGB(diffuseLight);
+				#if 0 // TODO remove this when irradiance map / diffuseEnvTex is bound to something good
+					vec3 diffuseLight = texture(diffuseEnvTex, n).rgb;
+					#ifdef SRGB_IBLMAP
+						diffuseLight = fromSRGB(diffuseLight);
+					#endif
+				#else
+					vec3 diffuseLight = vec3(1.0);
 				#endif
 
 				#if (IBL_TEX_LOD == IBL_TEX_LOD_AUTO) // if IBL_TEX_LOD == IBL_TEX_LOD_MANUAL, then iblMapLOD is defined as a uniform
@@ -374,7 +401,7 @@ return {
 			diffuse *= diffuseLight * pbrInputs.diffuseColor;
 			specular *= specularLight * (pbrInputs.specularColor * brdf.x + brdf.y);
 
-			return clamp(diffuse + specular, vec3(0.0), vec3(1.0));
+			return diffuse + specular;
 		}
 
 
@@ -529,8 +556,8 @@ return {
 				vec3 tangentViewDir = normalize(invWorldTBN * cameraDir);
 
 				vec2 samplingTexCoord = parallaxMapping(texCoord, tangentViewDir);
+				vec2 texDiff = samplingTexCoord - texCoord;
 				#if (PARALLAXMAP_LIMITS == PARALLAXMAP_LIMITS_AUTO) //automated texture offset limits
-					vec2 texDiff = samplingTexCoord - texCoord;
 					float bumpVal = GET_PARALLAXMAP * parallaxMapScale;
 					#if 0 // fast
 						texDiff = clamp(texDiff, -vec2(bumpVal), vec2(bumpVal));
@@ -539,7 +566,6 @@ return {
 					#endif
 					samplingTexCoord = texCoord + texDiff;
 				#elif (PARALLAXMAP_LIMITS == PARALLAXMAP_LIMITS_MANUAL) //user-defined texture offset limits
-					vec2 texDiff = samplingTexCoord - texCoord;
 					#if 0 // fast
 						texDiff = clamp(texDiff, -parallaxMapLimits, parallaxMapLimits);
 					#else // nice
@@ -684,7 +710,10 @@ return {
 			// Obtain final intensity as reflectance (BRDF) scaled by the energy of the light (cosine law)
 			vec3 color = NdotL * sunColor * (diffuseContrib + specContrib);
 
-			color += getIBLContribution(pbrInputs, n, reflection);
+			vec3 iblDiffuse;
+			vec3 iblSpecular;
+
+			color += getIBLContribution(pbrInputs, n, reflection, iblDiffuse, iblSpecular);
 
 			color = mix(color, color * occlusion, occlusionMapStrength);
 
@@ -702,12 +731,49 @@ return {
 				gl_FragColor = vec4(color, 1.0);
 			#endif
 
-			//gl_FragColor = vec4( metallic, roughness, occlusion, 1.0);
-			//gl_FragColor = vec4(tangentViewDir, 1.0);
-			//gl_FragColor = vec4(baseColor.rgb, 1.0);
-			//gl_FragColor = vec4(emissive, 1.0);
-			//gl_FragColor = vec4(baseColor.rgb, 1.0);
-			//gl_FragColor = vec4(step(vec3(0.55, 0.29, 0.9), baseColor.rgb * emissiveRaw), 1.0);
+			#if   (DEBUG == DEBUG_BASECOLOR)
+				gl_FragColor = vec4(baseColor.rgb, 1.0);
+			#elif (DEBUG == DEBUG_WORLDNORMALS)
+				gl_FragColor = vec4(n, 1.0);
+			#elif (DEBUG == DEBUG_VIEWNORMALS)
+				gl_FragColor = vec4(normalize((camera * vec4(n, 0.0)).rgb), 1.0);
+			#elif (DEBUG == DEBUG_TANGENTNORMALS)
+				gl_FragColor = vec4(normalize(invWorldTBN * n), 1.0);
+			#elif (DEBUG == DEBUG_TANGENTVIEWDIR)
+				gl_FragColor = vec4(tangentViewDir, 1.0);
+			#elif (DEBUG == DEBUG_PARALLAXSHIFT)
+				float tdl = length(texDiff.xy) * 10.0;
+				gl_FragColor = vec4( normalize(vec3(texDiff.x, texDiff.y, 0.0)) * vec3(tdl) , 1.0);
+			#elif (DEBUG == DEBUG_DIFFUSECOLOR)
+				gl_FragColor = vec4(diffuseColor, 1.0);
+			#elif (DEBUG == DEBUG_SPECULARCOLOR)
+				gl_FragColor = vec4(specularColor, 1.0);
+			#elif (DEBUG == DEBUG_EMISSIONCOLOR)
+				gl_FragColor = vec4(emissive, 1.0);
+			#elif (DEBUG == DEBUG_TEAMCOLOR)
+				gl_FragColor = vec4(teamColor.rgb * vec3(baseColor.a), 1.0);
+			#elif (DEBUG == DEBUG_OCCLUSION)
+				gl_FragColor = vec4(vec3(occlusion), 1.0);
+			#elif (DEBUG == DEBUG_ROUGHNESS)
+				gl_FragColor = vec4(vec3(roughness), 1.0);
+			#elif (DEBUG == DEBUG_METALLIC)
+				gl_FragColor = vec4(vec3(metallic), 1.0);
+			#elif (DEBUG == DEBUG_REFLECTIONDIR)
+				gl_FragColor = vec4(reflection, 1.0);
+			#elif (DEBUG == DEBUG_SPECWORLDREFLECTION)
+				gl_FragColor = vec4( texture(specularEnvTex, n).rgb, 1.0 );
+			#elif (DEBUG == DEBUG_SPECVIEWREFLECTION)
+				gl_FragColor = vec4( texture(specularEnvTex, reflection).rgb, 1.0 );
+			#elif (DEBUG == DEBUG_DIFFUSEWORLDREFLECTION)
+				gl_FragColor = vec4( texture(diffuseEnvTex, n).rgb, 1.0 );
+			#elif (DEBUG == DEBUG_IBLSPECULAR)
+				gl_FragColor = vec4( iblSpecular, 1.0 );
+			#elif (DEBUG == DEBUG_IBLDIFFUSE)
+				gl_FragColor = vec4( iblDiffuse, 1.0 );
+			#elif (DEBUG == DEBUG_SHADOW)
+				gl_FragColor = vec4( vec3(shadow), 1.0 );
+			#endif
+
 
 			%%FRAGMENT_POST_SHADING%%
 		}

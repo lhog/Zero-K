@@ -103,6 +103,29 @@ local pbrMaterialValues = {
 	["texUnits"] = function(pbr) return pbr.texUnits or nil end,
 }
 
+local pbrDebug = { -- Debug output. Will replace output color if enabled
+	baseColor = false,
+	worldNormals = false,
+	viewNormals = false,
+	tangentNormals = false,
+	tangentViewDir = false,
+	parallaxShift = false,
+	diffuseColor = false,
+	specularColor = false,
+	emissionColor = false,
+	teamColor = false,
+	occlusion = false,
+	roughness = false,
+	metallic = false,
+	reflectionDir = false,
+	specWorldReflection = false,
+	specViewReflection = false,
+	diffuseWorldReflection = false,
+	iblSpecular = false,
+	iblDiffuse = false,
+	shadow = false,
+}
+
 local unitMaterials = {}
 local materials = {}
 
@@ -154,6 +177,12 @@ local function parsePbrMatParams(pbr)
 		local define = {}
 		local uniform
 
+		for k, v in pairs(pbrDebug) do
+			if v then
+				table.insert(define, string.format("#define DEBUG DEBUG_%s", string.upper(k)))
+			end
+		end
+
 		if pntIdx then
 			local first  = string.sub(key, 1, pntIdx - 1)
 			local second = string.sub(key, pntIdx + 1)
@@ -166,6 +195,8 @@ local function parsePbrMatParams(pbr)
 				table.insert(define, "#define PARALLAXMAP_LIMITS PARALLAXMAP_LIMITS_MANUAL")
 			elseif first == "parallaxMap" and second == "limits" and val and valType == "boolean" then
 				table.insert(define, "#define PARALLAXMAP_LIMITS PARALLAXMAP_LIMITS_AUTO")
+			elseif first == "debug" and val and valType == "boolean" then
+				table.insert(define, string.format("#define DEBUG DEBUG_%s", string.upper(second)))
 			else
 				if second == "get" and val then
 					if first == "emissiveMap" then
@@ -238,18 +269,14 @@ local function parsePbrMatParams(pbr)
 				end
 			end
 		end
-		if define then
+		if #define > 0 then
 			tableConcat(shaderDefinitions, define)
+			--Spring.Echo(key, val, "define", define)
 		end
 
 		if uniform then
 			table.insert(customStandardUniforms, uniform)
-		end
-		if define then
-			Spring.Echo(key, val, define)
-		end
-		if uniform then
-			Spring.Echo(key, val, uniform.name, uniform.isTable, uniform.value)
+			--Spring.Echo(key, val, "uniform", uniform)
 		end
 	end
 	return shaderDefinitions, deferredDefinitions, customStandardUniforms, customDefferedUniforms
