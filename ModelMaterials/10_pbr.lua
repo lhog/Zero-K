@@ -293,7 +293,7 @@ local function createNewMatDef(pbr)
 			--[4] = "%TEX4",
 			[5] = "%BRDF",
 			[6] = '$shadow',
-			--[7] = '$specular',
+			[7] = '$reflection', --TODO replace with radiance map!!!
 			[8] = '$reflection',
 		},
 		DrawUnit = DrawUnit,

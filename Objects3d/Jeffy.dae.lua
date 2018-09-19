@@ -66,11 +66,9 @@ model = {
 		},
 		gammaCorrection = true, -- do gamma correction (RGB-->sRGB) on the final color.
 		texUnits = { -- substitute values
-			--["TEX0"] = "Jeffy_Diffuse+TeamColor.dds",
 			["TEX0"] = "Jeffy_DiffuseTeamColor1024x1024.dds",
 			["TEX1"] = ":l:Jeffy_NormalHeight_1k_uc.dds", --don't mipmap normals file
 			["TEX2"] = "Jeffy_Emissive512x512.dds",
-			--["TEX2"] = "Jeffy_Diffuse+TeamColor.dds",
 			["TEX3"] = "Jeffy_ORM_EMGS_1k.dds",
 			["BRDF"] = "brdflutTex.png"
 		}

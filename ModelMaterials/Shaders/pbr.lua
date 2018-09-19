@@ -133,8 +133,8 @@ return {
 		#endif
 
 		#ifdef GET_IBLMAP
-			uniform samplerCube reflectionEnvTex;
-			//uniform samplerCube specularEnvTex;
+			uniform samplerCube specularEnvTex;
+			uniform samplerCube diffuseEnvTex;
 			#if (IBL_TEX_LOD == IBL_TEX_LOD_MANUAL) //manual LOD
 				uniform float iblMapLOD;
 			#endif
@@ -345,21 +345,21 @@ return {
 			vec3 specular = vec3(iblMapScale.y);
 
 			#ifdef GET_IBLMAP
-				vec3 diffuseLight = texture(reflectionEnvTex, n).rgb;
+				vec3 diffuseLight = texture(diffuseEnvTex, n).rgb;
 				#ifdef SRGB_IBLMAP
 					diffuseLight = fromSRGB(diffuseLight);
 				#endif
 
 				#if (IBL_TEX_LOD == IBL_TEX_LOD_AUTO) // if IBL_TEX_LOD == IBL_TEX_LOD_MANUAL, then iblMapLOD is defined as a uniform
-					ivec2 reflectionEnvTexSize = textureSize(reflectionEnvTex, 0);
-					float iblMapLOD = log2(float(max(reflectionEnvTexSize.x, reflectionEnvTexSize.y)));
+					ivec2 specularEnvTexSize = textureSize(specularEnvTex, 0);
+					float iblMapLOD = log2(float(max(specularEnvTexSize.x, specularEnvTexSize.y)));
 				#endif
 
 				#ifdef IBL_TEX_LOD
 					float lod = (pbrInputs.roughness * iblMapLOD);
-					vec3 specularLight = textureLod(reflectionEnvTex, reflection, lod).rgb;
+					vec3 specularLight = textureLod(specularEnvTex, reflection, lod).rgb;
 				#else
-					vec3 specularLight = texture(reflectionEnvTex, reflection).rgb;
+					vec3 specularLight = texture(specularEnvTex, reflection).rgb;
 				#endif
 
 				#ifdef SRGB_IBLMAP
@@ -721,8 +721,8 @@ return {
 		--tex4 = 4,
 		brdfLUT = 5,
 		shadowTex = 6,
-		--specularEnvTex = 7,
-		reflectionEnvTex = 8,
+		diffuseEnvTex = 7,
+		specularEnvTex = 8,
 	},
 	uniformFloat = {
 		-- sunDir = {gl.GetSun("pos")}, -- material has sunDirLoc
