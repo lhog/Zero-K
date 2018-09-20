@@ -22,8 +22,6 @@ local function DrawUnit(unitID, material, drawMode)
 	end
 end
 
-Spring.Echo("JEFFYYYYYY!!!!")
-
 function myHash(str)
 	local hash = 0
 
@@ -143,10 +141,16 @@ local function parseNewMatTexUnits(pbr)
 	local boundTexUnits = {}
 	local texUnitDefs = pbrMaterialValues["texUnits"](pbr)
 
-	for tu, tfile in pairs(texUnitDefs) do
-		local newFN = "unittextures/" .. tfile
-		if VFS.FileExists(newFN) then
-			boundTexUnits[tu] = newFN
+	for tu, fileSpec in pairs(texUnitDefs) do
+		local s, e = string.find(fileSpec, ":.-:")
+		local texOpt = ""
+		if s and e then
+			texOpt = string.sub(fileSpec, s, e)
+		end
+		local fileName = string.gsub(fileSpec, ":.-:", "")
+		local newFilePath = "unittextures/" .. fileName
+		if VFS.FileExists(newFilePath) then
+			boundTexUnits[tu] = texOpt .. newFilePath --keep :{opts}:
 		end
 	end
 

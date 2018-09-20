@@ -478,16 +478,14 @@ return {
 			return pbrInputs.roughness4 / (M_PI * f * f);
 		}
 
-		float getShadowCoeff(vec4 shadowCoords) {
-			#ifdef use_shadows
+		#ifdef use_shadows
+			float getShadowCoeff(vec4 shadowCoords) {
 				float coeff = textureProj(shadowTex, shadowCoords + vec4(0.0, 0.0, -0.001, 0.0));
 				coeff  = (1.0 - coeff);
 				coeff *= shadowDensity;
 				return (1.0 - coeff);
-			#else
-				return 1.0;
-			#endif
-		}
+			}
+		#endif
 
 		#if defined(GET_PARALLAXMAP) && defined(HAS_TANGENTS)
 			#ifdef PARALLAXMAP_FAST
@@ -767,8 +765,10 @@ return {
 
 			color = mix(color, color * occlusion, occlusionMapStrength);
 
-			float shadow = getShadowCoeff(shadowTexCoord);
-			color *= shadow;
+			#ifdef use_shadows
+				float shadow = getShadowCoeff(shadowTexCoord);
+				color *= shadow;
+			#endif
 
 			color += emissive;
 
