@@ -374,7 +374,12 @@ return {
 						diffuseLight = fromSRGB(diffuseLight);
 					#endif
 				#else
-					vec3 diffuseLight = vec3(1.0);
+					ivec2 diffuseEnvTexSize = textureSize(diffuseEnvTex, 0);
+					float iblDiffMapLOD = log2(float(max(diffuseEnvTexSize.x, diffuseEnvTexSize.y)));
+					vec3 diffuseLight = textureLod(diffuseEnvTex, n, iblDiffMapLOD - 4.0).rgb;
+					#ifdef SRGB_IBLMAP
+						diffuseLight = fromSRGB(diffuseLight);
+					#endif
 				#endif
 
 				#if (IBL_TEX_LOD == IBL_TEX_LOD_AUTO) // if IBL_TEX_LOD == IBL_TEX_LOD_MANUAL, then iblMapLOD is defined as a uniform
