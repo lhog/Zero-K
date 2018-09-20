@@ -422,6 +422,9 @@ return {
 					#ifdef SRGB_IBLMAP
 						diffuseLight = fromSRGB(diffuseLight);
 					#endif
+					#if 1
+						diffuseLight = vec3(1.0);
+					#endif
 				#endif
 
 				#if (IBL_TEX_LOD == IBL_TEX_LOD_AUTO) // if IBL_TEX_LOD == IBL_TEX_LOD_MANUAL, then iblMapLOD is defined as a uniform
