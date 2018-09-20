@@ -2,7 +2,7 @@ model = {
 	--radius = 25.0,
 	--height = 40,
 	--tex1 = "Jeffy_Diffuse+TeamColor.dds",
-	tex1 = "Jeffy_Color512x512.png",
+	tex1 = "Jeffy_DiffuseTeamColor1024x1024.dds",
 	--tex2 = "armtech_tex2.dds",
 	--tex2 = "armtech_tex2.dds",
 	midpos = {0, 0, 0},
@@ -29,9 +29,9 @@ model = {
 		parallaxMap = { -- parallax occlusion mapping. Will be ignored if normalMap.hasTangents == false
 			fast = false, --always test if fast is good enough and only switch to "precise" if quality is bad. fast=true is simple parallax, fast=false is parallax occlusion mapping
 			perspective = false, --whether to divide tangentViewDir.xy by tangentViewDir.z or not. A matter of personal preference. Check both.
-			limits = false, -- Can be boolean or vec2() table. This limits how large texture coordinates offsets parallax mapping can do. Offsets bigget than limits will be clamped.
+			limits = true, -- Can be boolean or vec2() table. This limits how large texture coordinates offsets parallax mapping can do. Offsets bigget than limits will be clamped.
 			scale = 0.02, --if you set this up and your model texturing (and everything else) looks off, try to divide scale by 10 and then find out the best value iteratively
-			get = "[1].a", -- expects linear bump map as input
+			--get = "[1].a", -- expects linear bump map as input
 			--get = nil,
 			gammaCorrection = false, -- don't do. A is always linear
 		},
@@ -64,6 +64,8 @@ model = {
 			lod = true, -- can be nil, a number, or true for auto
 			gammaCorrection = false, -- do sRGB to RGB in-shader translation. Defaults to false, as roughness should be saved in linear RGB.
 		},
+		exposure = 1.0,
+		toneMapping = "filmic", --valid values are "aces", "uncharted2", "filmic".
 		gammaCorrection = true, -- do gamma correction (RGB-->sRGB) on the final color.
 		texUnits = { -- substitute values
 			["TEX0"] = "Jeffy_DiffuseTeamColor1024x1024.dds",

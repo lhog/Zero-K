@@ -98,6 +98,8 @@ local pbrMaterialValues = {
 	["iblMap.lod"] = function(pbr) return ((pbr.iblMap or {}).lod == nil and false) or pbr.iblMap.lod end,
 	["iblMap.gammaCorrection"] = function(pbr) return ((pbr.iblMap or {}).gammaCorrection == nil and false) or pbr.iblMap.gammaCorrection end,
 
+	["exposure"] = function(pbr) return pbr.exposure or 1.0 end,
+	["toneMapping"] = function(pbr) return pbr.toneMapping or nil end,
 	["gammaCorrection"] = function(pbr) return ((pbr.gammaCorrection == nil) and true) or pbr.gammaCorrection end,
 
 	["texUnits"] = function(pbr) return pbr.texUnits or nil end,
@@ -124,6 +126,8 @@ local pbrDebug = { -- Debug output. Will replace output color if enabled
 	iblSpecular = false,
 	iblDiffuse = false,
 	shadow = false,
+	preExpColor = false,
+	tmColor = false,
 }
 
 local unitMaterials = {}
@@ -175,7 +179,7 @@ local function parsePbrMatParams(pbr)
 		local pntIdx = string.find(key, "%.")
 
 		local define = {}
-		local uniform
+		local uniform = {}
 
 		for k, v in pairs(pbrDebug) do
 			if v then
@@ -231,26 +235,26 @@ local function parsePbrMatParams(pbr)
 			end
 
 			if second == "scale" or second == "strength" then
-				uniform = {
+				table.insert(uniform, {
 					name = first .. second:gsub("^%l", string.upper),
 					isTable = (valType == "table"),
 					value = val,
 					location = nil,
-				}
+				})
 			elseif second == "lod" and valType == "number" then
-				uniform = {
+				table.insert(uniform, {
 					name = first .. second:gsub("%l", string.upper),
 					isTable = (valType == "table"),
 					value = val,
 					location = nil,
-				}
+				})
 			elseif second == "limits" and val and valType == "table" then
-				uniform = {
+				table.insert(uniform, {
 					name = first .. second:gsub("^%l", string.upper),
 					isTable = (valType == "table"),
 					value = val,
 					location = nil,
-				}
+				})
 			end
 		else
 			if key == "texUnits" then
@@ -261,11 +265,19 @@ local function parsePbrMatParams(pbr)
 						table.insert(shaderDefinitions, "#define HAS_" .. tu)
 					end
 				end
+			elseif valType == "number" then
+				table.insert(uniform, {
+					name = key,
+					isTable = (valType == "table"),
+					value = val,
+					location = nil,
+				})
 			else
 				if valType == "boolean" and val then
 					table.insert(define, "#define " .. camelToUnderline(key))
 				elseif valType == "string" then
-					table.insert(define, "#define "..string.upper(key .. "_" .. val))
+					table.insert(define, string.format("#define %s %s_%s", string.upper(key), string.upper(key), string.upper(val)))
+					Spring.Echo("!!!!!!!!!!!", string.format("#define %s %s_%s", string.upper(key), string.upper(key), string.upper(val)))
 				end
 			end
 		end
@@ -275,7 +287,7 @@ local function parsePbrMatParams(pbr)
 		end
 
 		if uniform then
-			table.insert(customStandardUniforms, uniform)
+			tableConcat(customStandardUniforms, uniform)
 			--Spring.Echo(key, val, "uniform", uniform)
 		end
 	end

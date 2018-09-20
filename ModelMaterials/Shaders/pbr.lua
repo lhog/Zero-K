@@ -116,6 +116,10 @@ return {
 		#define EMISSIVEMAP_TYPE_VAL 1
 		#define EMISSIVEMAP_TYPE_MULT 2
 
+		#define TONEMAPPING_ACES 1
+		#define TONEMAPPING_UNCHARTED2 2
+		#define TONEMAPPING_FILMIC 3
+
 		#define DEBUG_BASECOLOR 1
 		#define DEBUG_WORLDNORMALS 2
 		#define DEBUG_VIEWNORMALS 3
@@ -136,6 +140,8 @@ return {
 		#define DEBUG_IBLSPECULAR 18
 		#define DEBUG_IBLDIFFUSE 19
 		#define DEBUG_SHADOW 20
+		#define DEBUG_PREEXPCOLOR 21
+		#define DEBUG_TMCOLOR 22
 
 		uniform vec3 sunPos;
 		uniform vec3 sunColor;
@@ -185,6 +191,8 @@ return {
 			uniform sampler2DShadow shadowTex;
 			uniform float shadowDensity;
 		#endif
+
+		uniform float exposure;
 
 		uniform int simFrame; //set by api_cus
 		uniform vec4 teamColor; //set by engine
@@ -312,6 +320,40 @@ return {
 			#endif
 			return vec4(srgbOut, rgbIn.a);
 		}
+
+		/////////////////////////////////////////
+		vec3 ACESFilmicTM(in vec3 x)
+		{
+			float a = 2.51f;
+			float b = 0.03f;
+			float c = 2.43f;
+			float d = 0.59f;
+			float e = 0.14f;
+			return clamp((x*(a*x+b))/(x*(c*x+d)+e), vec3(0.0), vec3(1.0));
+		}
+		vec3 Uncharted2TM(in vec3 color)
+		{
+			const float A = 0.15;
+			const float B = 0.50;
+			const float C = 0.10;
+			const float D = 0.20;
+			const float E = 0.02;
+			const float F = 0.30;
+			const float W = 11.2;
+			const float white = ((W * (A * W + C * B) + D * E) / (W * (A * W + B) + D * F)) - E / F;
+
+			vec3 outColor = ((color * (A * color + C * B) + D * E) / (color * (A * color + B) + D * F)) - E / F;
+			outColor /= white;
+
+			return color;
+		}
+		vec3 FilmicTM(in vec3 color)
+		{
+			vec3 outColor = max(vec3(0.), color - vec3(0.004));
+			outColor = (outColor * (6.2 * outColor + .5)) / (outColor * (6.2 * outColor + 1.7) + 0.06);
+			return fromSRGB(outColor); //sadly FilmicTM outputs gamma corrected colors, so need to reverse that effect
+		}
+		/////////////////////////////////////////
 
 		#line 20247
 
@@ -725,15 +767,26 @@ return {
 			float shadow = getShadowCoeff(shadowTexCoord);
 			color *= shadow;
 
-			color = mix(color, teamColor.rgb, baseColor.a);
 			color += emissive;
 
-			float alpha = 1.0;
+			vec3 preExpColor = color * vec3(exposure);
+
+			#if (TONEMAPPING == TONEMAPPING_ACES)
+				vec3 tmColor = ACESFilmicTM(preExpColor);
+			#elif (TONEMAPPING == TONEMAPPING_UNCHARTED2)
+				vec3 tmColor = Uncharted2TM(preExpColor);
+			#elif (TONEMAPPING == TONEMAPPING_FILMIC)
+				vec3 tmColor = FilmicTM(preExpColor);
+			#else
+				vec3 tmColor = preExpColor;
+			#endif
+
+			vec3 preGammaColor = mix(tmColor, teamColor.rgb, baseColor.a);
 
 			#ifdef GAMMA_CORRECTION
-				gl_FragColor = toSRGB( vec4(color, 1.0) );
+				gl_FragColor = toSRGB( vec4(preGammaColor, 1.0) );
 			#else
-				gl_FragColor = vec4(color, 1.0);
+				gl_FragColor = vec4(preGammaColor, 1.0);
 			#endif
 
 			#if   (DEBUG == DEBUG_BASECOLOR)
@@ -777,6 +830,10 @@ return {
 				gl_FragColor = vec4( iblDiffuse, 1.0 );
 			#elif (DEBUG == DEBUG_SHADOW)
 				gl_FragColor = vec4( vec3(shadow), 1.0 );
+			#elif (DEBUG == DEBUG_PREEXPCOLOR)
+				gl_FragColor = vec4(preExpColor, 1.0);
+			#elif (DEBUG == DEBUG_TMCOLOR)
+				gl_FragColor = vec4(tmColor, 1.0);
 			#endif
 
 
