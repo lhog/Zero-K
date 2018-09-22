@@ -10,7 +10,6 @@ model = {
 	pbr = {
 		flipUV = false, --flip second component of UV map. False is for DDS, True is for everything else. For now keep everything either in DDS or in PNG/TGA
 		fastGamma = true, --default is false i.e. more precise method
-		fastDiffuse = true, --Lambert(true) or Burley(false)
 		tbnReortho = true, -- Re-orthogonalize TBN matrix using Gram-Schmidt process. Might behave differently depending on "hasTangents". Default is true.
 		pbrWorkflow = "metallic", -- either "metallic" or "specular". "specular" is not yet implemented
 		-- PBR shader will sample a certain number of supplied textures.
@@ -18,13 +17,13 @@ model = {
 		baseColorMap = {
 			scale = {1.0, 1.0, 1.0, 1.0}, -- acts as a color if tex unit is unused or as a multiplier if tex unit is present. Defaults to vec4(1.0).
 			get = "[0].rgba", -- take sample from first texture unit in array.
-			gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to true.
+			gammaCorrection = true, -- Artists see colors in sRGB, but we need colors in linear space. Therefore this defaults to true.
 		},
 		normalMap = {
 			hasTangents = true, --you somehow must know if the import of the model puts tangents and bitangents to gl_MultiTexCoord[5,6]
-			scale = 1.0, -- scale for Red/X/tangent and Green/Y/bitangent parts of normal sampled from normalMapTex. Defaults to 1.0
+			scale = {1.0, 1.0, 1.0}, -- scale for normals sampled from normalMapTex. Defaults to vec3(1.0)
 			get = "[1].rgb", --If you use DDS and see some weird moar/acne like artifacts, use uncompressed DDS instead.
-			gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to true, because normals are stored just as a regular image. If you don't see right reflections, try to flip this value
+			gammaCorrection = false, -- Defaults to false. Don't change unless you know what you are doing!
 		},
 		parallaxMap = { -- parallax occlusion mapping. Will be ignored if normalMap.hasTangents == false
 			fast = false, --always test if fast is good enough and only switch to "precise" if quality is bad. fast=true is simple parallax, fast=false is parallax occlusion mapping
@@ -33,43 +32,43 @@ model = {
 			scale = 0.02, --if you set this up and your model texturing (and everything else) looks off, try to divide scale by 10 and then find out the best value iteratively
 			--get = "[1].a", -- expects linear bump map as input
 			--get = nil,
-			gammaCorrection = false, -- don't do. A is always linear
+			gammaCorrection = false, -- Defaults to false. Don't change unless you know what you are doing!
 		},
 		emissiveMap = {
 			--scale = {1.0, 1.0, 1.0}, -- acts as a color if tex unit is unused or as a multiplier if tex unit is present. Can be a single channel, in that case it acts as a multipier to baseColor Defaults to vec3(1.0).
 			scale = 2.5,
 			--get = "[2].rgb", --get can be RGB
-			get = "[3].a", --or get can be single channel. I
-			--gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to true.
-			gammaCorrection = false,-- don't do. A is always linear
+			get = "[3].a", --or get can be single channel.
+			gammaCorrection = false, -- Defaults to true, because you might provide RGB channels (see baseColorMap.gammaCorrection). If 1 channel emissive is used don't do gammaCorrection.
 		},
 		occlusionMap = {
 			strength = 1.0, --multiplier in case occlusionMap is present. Does NOT act as a texture stand-in
 			get = "[3].r",
-			gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to false, as ao should be saved in linear RGB.
+			gammaCorrection = false, -- Defaults to false. Don't change unless you know what you are doing!
 		},
 		roughnessMap = {
 			scale = 1.0, --acts as a multiplier or a base value (if get is nil)
 			get = "[3].g",
-			gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to false, as roughness should be saved in linear RGB.
+			gammaCorrection = false, -- Defaults to false. Don't change unless you know what you are doing!
 		},
 		metallicMap = {
 			scale = 1.0, --acts as a multiplier or a base value (if get is nil)
 			get = "[3].b",
-			gammaCorrection = true, -- do sRGB to RGB in-shader translation. Defaults to false, as roughness should be saved in linear RGB.
+			gammaCorrection = false, -- Defaults to false. Don't change unless you know what you are doing!
 		},
 		iblMap = {
+			invToneMapExp = 1.3, --can be nil to disable poor man's SDR to HDR mapping
 			scale = {1.0, 1.0}, --{diffuse, specular} IBL scale. Acts as a multiplier or a base value (if get is nil)
 			get = true, -- to generate GET_IBLMAP definition
 			lod = true, -- can be nil, a number, or true for auto
-			gammaCorrection = false, -- do sRGB to RGB in-shader translation. Defaults to false, as roughness should be saved in linear RGB.
+			gammaCorrection = false, -- Artists see colors in sRGB, but we need colors in linear space. Therefore this defaults to true.
 		},
 		exposure = 1.0,
-		toneMapping = "filmic", --valid values are "aces", "uncharted2", "filmic".
+		toneMapping = "uncharted2", --valid values are "aces", "uncharted2", "filmic".
 		gammaCorrection = true, -- do gamma correction (RGB-->sRGB) on the final color.
 		texUnits = { -- substitute values
 			["TEX0"] = "Jeffy_DiffuseTeamColor1024x1024.dds",
-			["TEX1"] = "Jeffy_NormalHeight_1k_uc.dds",
+			["TEX1"] = "Jeffy_NormalHeight_1k_uc_mips.dds",
 			["TEX2"] = "Jeffy_Emissive512x512.dds",
 			["TEX3"] = "Jeffy_ORM_EMGS_1k.dds",
 			["BRDF"] = "brdflutTex.png"

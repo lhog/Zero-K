@@ -51,17 +51,20 @@ return {
 					vec3 modelTangent = gl_MultiTexCoord5.xyz;
 					vec3 worldTangent = normalize(vec3(modelMatrix * vec4(modelTangent, 0.0)));
 
-					#if 0 //take modelBitangent from attributes
+					#if 1 //take modelBitangent from attributes
 						vec3 modelBitangent = gl_MultiTexCoord6.xyz;
 						vec3 worldBitangent = normalize(vec3(modelMatrix * vec4(modelBitangent, 0.0)));
 					#else //calculate worldBitangent
 						#ifdef TBN_REORTHO
 							worldTangent = normalize(worldTangent - worldNormalN * dot(worldNormalN, worldTangent));
 						#endif
-						vec3 worldBitangent = normalize( cross(worldNormalN, worldTangent) );
+
+						//vec3 worldBitangent = normalize( cross(worldNormalN, worldTangent) );
+						vec3 worldBitangent = normalize( cross(worldTangent, worldNormalN) );
 					#endif
 
-					//TODO check handedness: see http://www.opengl-tutorial.org/intermediate-tutorials/tutorial-13-normal-mapping/ (Handedness)
+					float handednessSign = dot(cross(worldNormalN, worldTangent), worldBitangent);
+					worldTangent = worldTangent * handednessSign;
 
 					worldTBN = mat3(worldTangent, worldBitangent, worldNormalN);
 				#else
@@ -88,7 +91,6 @@ return {
 			#endif
 
 			//TODO:
-			// 1) shadows: shadowTexCoord
 			// 2) flashlights ?
 			// 3) treadoffset ?
 
@@ -120,29 +122,6 @@ return {
 		#define TONEMAPPING_UNCHARTED2 2
 		#define TONEMAPPING_FILMIC 3
 
-		#define DEBUG_BASECOLOR 1
-		#define DEBUG_WORLDNORMALS 2
-		#define DEBUG_VIEWNORMALS 3
-		#define DEBUG_TANGENTNORMALS 4
-		#define DEBUG_TANGENTVIEWDIR 4
-		#define DEBUG_PARALLAXSHIFT 6
-		#define DEBUG_DIFFUSECOLOR 7
-		#define DEBUG_SPECULARCOLOR 8
-		#define DEBUG_EMISSIONCOLOR 9
-		#define DEBUG_TEAMCOLOR 10
-		#define DEBUG_OCCLUSION 11
-		#define DEBUG_ROUGHNESS 12
-		#define DEBUG_METALLIC 13
-		#define DEBUG_REFLECTIONDIR 14
-		#define DEBUG_SPECWORLDREFLECTION 15
-		#define DEBUG_SPECVIEWREFLECTION 16
-		#define DEBUG_DIFFUSEWORLDREFLECTION 17
-		#define DEBUG_IBLSPECULAR 18
-		#define DEBUG_IBLDIFFUSE 19
-		#define DEBUG_SHADOW 20
-		#define DEBUG_PREEXPCOLOR 21
-		#define DEBUG_TMCOLOR 22
-
 		uniform vec3 sunPos;
 		uniform vec3 sunColor;
 
@@ -173,7 +152,7 @@ return {
 		uniform vec2 iblMapScale;
 
 		uniform vec4 baseColorMapScale;
-		uniform float normalMapScale;
+		uniform vec3 normalMapScale;
 		#if EMISSIVEMAP_TYPE == EMISSIVEMAP_TYPE_VAL
 			uniform vec3 emissiveMapScale;
 		#elif EMISSIVEMAP_TYPE == EMISSIVEMAP_TYPE_MULT
@@ -183,8 +162,13 @@ return {
 		uniform float roughnessMapScale;
 		uniform float metallicMapScale;
 		uniform float parallaxMapScale;
+
 		#if (PARALLAXMAP_LIMITS == PARALLAXMAP_LIMITS_MANUAL) //manual limits
 			uniform vec2 parallaxMapLimits;
+		#endif
+
+		#ifdef IBL_INVTONEMAP
+			uniform float iblMapInvToneMapExp;
 		#endif
 
 		#ifdef use_shadows
@@ -202,6 +186,7 @@ return {
 			float NdotL;					// cos angle between normal and light direction
 			float NdotV;					// cos angle between normal and view direction
 			float NdotH;					// cos angle between normal and half vector
+			float LdotV;					// cos angle between light direction and view direction
 			float LdotH;					// cos angle between light direction and half vector
 			float VdotH;					// cos angle between view direction and half vector
 			vec3 reflectance0;				// full reflectance color (normal incidence angle)
@@ -322,17 +307,16 @@ return {
 		}
 
 		/////////////////////////////////////////
-		vec3 ACESFilmicTM(in vec3 x)
-		{
+		vec3 ACESFilmicTM(in vec3 x) {
 			float a = 2.51f;
 			float b = 0.03f;
 			float c = 2.43f;
 			float d = 0.59f;
 			float e = 0.14f;
-			return clamp((x*(a*x+b))/(x*(c*x+d)+e), vec3(0.0), vec3(1.0));
+			return (x*(a*x+b))/(x*(c*x+d)+e);
 		}
-		vec3 Uncharted2TM(in vec3 color)
-		{
+
+		vec3 Uncharted2TM(in vec3 x) {
 			const float A = 0.15;
 			const float B = 0.50;
 			const float C = 0.10;
@@ -342,16 +326,29 @@ return {
 			const float W = 11.2;
 			const float white = ((W * (A * W + C * B) + D * E) / (W * (A * W + B) + D * F)) - E / F;
 
-			vec3 outColor = ((color * (A * color + C * B) + D * E) / (color * (A * color + B) + D * F)) - E / F;
+			x *= vec3(2.0); //exposure bias
+
+			vec3 outColor = ((x * (A * x + C * B) + D * E) / (x * (A * x + B) + D * F)) - E / F;
 			outColor /= white;
 
-			return color;
+			return outColor;
 		}
-		vec3 FilmicTM(in vec3 color)
-		{
-			vec3 outColor = max(vec3(0.), color - vec3(0.004));
+
+		vec3 FilmicTM(in vec3 x) {
+			vec3 outColor = max(vec3(0.), x - vec3(0.004));
 			outColor = (outColor * (6.2 * outColor + .5)) / (outColor * (6.2 * outColor + 1.7) + 0.06);
 			return fromSRGB(outColor); //sadly FilmicTM outputs gamma corrected colors, so need to reverse that effect
+		}
+
+		const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
+
+		vec3 expExpand(in vec3 x, in float cutoff, in float mul) {
+			float xL = dot(x, LUMA);
+
+			float cutEval = step(cutoff, xL);
+
+			float yL = (1.0 - cutEval) * xL + cutEval * (exp(mul * xL) - exp(mul * cutoff) + cutoff);
+			return x * yL / xL;
 		}
 		/////////////////////////////////////////
 
@@ -379,7 +376,12 @@ return {
 						worldTangent = normalize(worldTangent - worldNormalN * dot(worldNormalN, worldTangent));
 					#endif
 
-					vec3 worldBitangent = normalize( cross(worldNormalN, worldTangent) );
+					//vec3 worldBitangent = normalize( cross(worldNormalN, worldTangent) );
+					vec3 worldBitangent = normalize( cross(worldTangent, worldNormalN) );
+
+					float handednessSign = dot(cross(worldNormalN, worldTangent), worldBitangent);
+					worldTangent = worldTangent * handednessSign;
+
 					mat3 worldTBN = mat3(worldTangent, worldBitangent, worldNormalN);
 				#else // HAS_TANGENTS
 					// Do nothing, got worldTBN from vertex shader
@@ -390,21 +392,21 @@ return {
 				#ifdef SRGB_NORMALMAP
 					normalMapVal = fromSRGB(normalMapVal);
 				#endif
-				normalMapVal = vec3(2.0) * normalMapVal - vec3(1.0); // [0:1] -> [-0.5:0.5]
+				normalMapVal = vec3(2.0) * normalMapVal - vec3(1.0); // [0:1] -> [-1.0:1.0]
 				vec3 worldFragNormal = worldTBN * normalMapVal;
 			#else // undefined GET_NORMALMAP
 				// don't do normal mapping, just pass worldNormal
 				vec3 worldFragNormal = worldNormal;
 			#endif
 
-			worldFragNormal *= vec3(normalMapScale, normalMapScale, 1.0);
+			worldFragNormal *= normalMapScale;
 			worldFragNormal = normalize(worldFragNormal);
 
 			return worldFragNormal;
 		}
 
 
-		vec3 getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection, out vec3 diffuse, out vec3 specular)
+		void getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection, out vec3 diffuse, out vec3 specular)
 		{
 			diffuse = vec3(iblMapScale.x);
 			specular = vec3(iblMapScale.y);
@@ -419,10 +421,17 @@ return {
 					ivec2 diffuseEnvTexSize = textureSize(diffuseEnvTex, 0);
 					float iblDiffMapLOD = log2(float(max(diffuseEnvTexSize.x, diffuseEnvTexSize.y)));
 					vec3 diffuseLight = textureLod(diffuseEnvTex, n, iblDiffMapLOD - 4.0).rgb;
+
 					#ifdef SRGB_IBLMAP
 						diffuseLight = fromSRGB(diffuseLight);
 					#endif
-					#if 1
+
+					#ifdef IBL_INVTONEMAP
+						float avgDLum = dot(LUMA, textureLod(diffuseEnvTex, n, iblDiffMapLOD).rgb);
+						diffuseLight = expExpand(diffuseLight, avgDLum, iblMapInvToneMapExp);
+					#endif
+
+					#if 0
 						diffuseLight = vec3(1.0);
 					#endif
 				#endif
@@ -442,16 +451,25 @@ return {
 				#ifdef SRGB_IBLMAP
 					specularLight = fromSRGB(specularLight);
 				#endif
+
+				#ifdef IBL_INVTONEMAP
+					float iblSpecMapLOD = log2(float(max(specularEnvTexSize.x, specularEnvTexSize.y)));
+					float avgSLum = dot(LUMA, textureLod(specularEnvTex, reflection, iblSpecMapLOD).rgb);
+					specularLight = expExpand(specularLight, avgSLum, iblMapInvToneMapExp);
+				#endif
+
 			#else
 				vec3 diffuseLight = vec3(1.0);
 				vec3 specularLight = vec3(1.0);
 			#endif
 
+			//sanitize Lights
+			diffuseLight = max(vec3(0.0), diffuseLight);
+			specularLight = max(vec3(0.0), specularLight);
+
 			vec3 brdf = fromSRGB( texture(brdfLUT, vec2(pbrInputs.NdotV, 1.0 - pbrInputs.roughness)) ).rgb;
 			diffuse *= diffuseLight * pbrInputs.diffuseColor;
 			specular *= specularLight * (pbrInputs.specularColor * brdf.x + brdf.y);
-
-			return diffuse + specular;
 		}
 
 
@@ -479,8 +497,27 @@ return {
 		}
 
 		#ifdef use_shadows
-			float getShadowCoeff(vec4 shadowCoords) {
-				float coeff = textureProj(shadowTex, shadowCoords + vec4(0.0, 0.0, -0.001, 0.0));
+			float getShadowCoeff(in vec4 shadowCoords, PBRInfo pbrInputs) {
+				float v1 = sqrt(1.0 - pbrInputs.LdotV * pbrInputs.LdotV);
+				float bias = 0.00005 + 0.0002 * v1;
+
+				float coeff = 0.0;
+
+				vec2 invShadowMapSize = 1.0 / textureSize( shadowTex, 0 );
+				const mat3 w = mat3(
+					0.0625, 0.125, 0.0625,
+					0.125 , 0.25 ,  0.125,
+					0.0625, 0.125, 0.0625
+				);
+				for( int x = -1; x <= 1; x++ ) {
+					for( int y = -1; y <= 1; y++ ) {
+						vec2 offset = vec2( x, y ) * invShadowMapSize;
+						coeff += w[1 + x][1 + y] * textureProj(shadowTex, shadowCoords + vec4(offset.x, offset.y, -bias, 0.0) );
+					}
+				}
+
+				//coeff += textureProj(shadowTex, shadowCoords + vec4(0.0, 0.0, -bias, 0.0) );
+
 				coeff  = (1.0 - coeff);
 				coeff *= shadowDensity;
 				return (1.0 - coeff);
@@ -584,17 +621,6 @@ return {
 			#endif
 		}
 
-		vec2 softsaturate(in vec2 x, in vec2 lim, in float linPercent) {
-			vec2 xN = abs(x / lim);
-			vec2 linCut = vec2(linPercent) * abs(lim);
-			vec2 k = log( (-linCut - vec2(1.0)) / (linCut - vec2(1.0)) ) / linCut;
-			vec2 st = step(linCut, xN);
-
-			//linear till linCut, logistic curve after
-			vec2 sat = (vec2(1.0) - st) * xN + st * vec2(2.0) / (vec2(1.0) + exp(-k * xN)) - vec2(1.0);
-			return x * sat;
-		}
-
 		void main(void) {
 			%%FRAGMENT_PRE_SHADING%%
 
@@ -607,24 +633,18 @@ return {
 				vec2 texDiff = samplingTexCoord - texCoord;
 				#if (PARALLAXMAP_LIMITS == PARALLAXMAP_LIMITS_AUTO) //automated texture offset limits
 					float bumpVal = GET_PARALLAXMAP * parallaxMapScale;
-					#if 0 // fast
-						texDiff = clamp(texDiff, -vec2(bumpVal), vec2(bumpVal));
-					#else // nice
-						texDiff = softsaturate(texDiff, vec2(bumpVal), 0.8);
-					#endif
+					texDiff = clamp(texDiff, -vec2(bumpVal), vec2(bumpVal));
 					samplingTexCoord = texCoord + texDiff;
 				#elif (PARALLAXMAP_LIMITS == PARALLAXMAP_LIMITS_MANUAL) //user-defined texture offset limits
-					#if 0 // fast
-						texDiff = clamp(texDiff, -parallaxMapLimits, parallaxMapLimits);
-					#else // nice
-						texDiff = softsaturate(texDiff, parallaxMapLimits, 0.8);
-					#endif
+					texDiff = clamp(texDiff, -parallaxMapLimits, parallaxMapLimits);
 					samplingTexCoord = texCoord + texDiff;
 				#endif
-
+/*
 				bvec4 badTexCoords = bvec4(samplingTexCoord.x > 1.0, samplingTexCoord.y > 1.0, samplingTexCoord.x < 0.0, samplingTexCoord.y < 0.0);
 				if (any(badTexCoords))
 					discard;
+*/
+				samplingTexCoord = clamp(samplingTexCoord, vec2(0.0), vec2(1.0));
 			#else
 				vec2 samplingTexCoord = texCoord;
 			#endif
@@ -699,8 +719,8 @@ return {
 
 			// sanitize inputs
 			// TODO: expand ranges?
-			roughness = clamp(roughness, MINROUGHNESS, 1.0);
-			metallic = clamp(metallic, 0.0, 1.0);
+			roughness = max(roughness, MINROUGHNESS);
+			metallic = max(metallic, 0.0);
 
 			float roughness2 = roughness * roughness;
 			float roughness4 = roughness2 * roughness2;
@@ -720,7 +740,7 @@ return {
 			vec3 specularEnvironmentR90 = vec3(1.0, 1.0, 1.0) * reflectance90;
 
 			vec3 n = getWorldFragNormal();					// normal at surface point
-			vec3 v = normalize(cameraDir);					// Vector from surface point to camera, might need to flip it
+			vec3 v = normalize(cameraDir);					// Vector from surface point to camera
 			vec3 l = normalize(sunPos);						// Vector from surface point to light
 			vec3 h = normalize(l + v);						// Half vector between both l and v
 			vec3 reflection = -normalize(reflect(v, n));
@@ -728,6 +748,7 @@ return {
 			float NdotL = clamp(dot(n, l), 0.001, 1.0);
 			float NdotV = clamp(abs(dot(n, v)), 0.001, 1.0);
 			float NdotH = clamp(dot(n, h), 0.0, 1.0);
+			float LdotV = clamp(dot(l, v), 0.0, 1.0);
 			float LdotH = clamp(dot(l, h), 0.0, 1.0);
 			float VdotH = clamp(dot(v, h), 0.0, 1.0);
 
@@ -736,6 +757,7 @@ return {
 				NdotV,
 				NdotH,
 				LdotH,
+				LdotV,
 				VdotH,
 				specularEnvironmentR0,
 				specularEnvironmentR90,
@@ -756,23 +778,29 @@ return {
 			vec3 specContrib = F * G * D / (4.0 * NdotL * NdotV);
 
 			// Obtain final intensity as reflectance (BRDF) scaled by the energy of the light (cosine law)
-			vec3 color = NdotL * sunColor * (diffuseContrib + specContrib);
+			vec3 modelDiffColor = NdotL * sunColor * diffuseContrib;
+			vec3 modelSpecColor = NdotL * sunColor * specContrib;
 
 			vec3 iblDiffuse;
 			vec3 iblSpecular;
 
-			color += getIBLContribution(pbrInputs, n, reflection, iblDiffuse, iblSpecular);
+			getIBLContribution(pbrInputs, n, reflection, iblDiffuse, iblSpecular);
 
-			color = mix(color, color * occlusion, occlusionMapStrength);
+			vec3 totalDiffColor = modelDiffColor + iblDiffuse;
+			vec3 totalDiffColorAO = mix(totalDiffColor, totalDiffColor * occlusion, occlusionMapStrength);
+
+			vec3 totalSpecColor = modelSpecColor + iblSpecular;
+
+			vec3 brdfPassColor = totalDiffColorAO + totalSpecColor;
 
 			#ifdef use_shadows
-				float shadow = getShadowCoeff(shadowTexCoord);
-				color *= shadow;
+				float shadow = getShadowCoeff(shadowTexCoord, pbrInputs);
+				brdfPassColor *= shadow;
 			#endif
 
-			color += emissive;
+			brdfPassColor += emissive;
 
-			vec3 preExpColor = color * vec3(exposure);
+			vec3 preExpColor = brdfPassColor * vec3(exposure);
 
 			#if (TONEMAPPING == TONEMAPPING_ACES)
 				vec3 tmColor = ACESFilmicTM(preExpColor);
@@ -799,9 +827,7 @@ return {
 			#elif (DEBUG == DEBUG_VIEWNORMALS)
 				gl_FragColor = vec4(normalize((camera * vec4(n, 0.0)).rgb), 1.0);
 			#elif (DEBUG == DEBUG_TANGENTNORMALS)
-				gl_FragColor = vec4(normalize(invWorldTBN * n), 1.0);
-			#elif (DEBUG == DEBUG_TANGENTVIEWDIR)
-				gl_FragColor = vec4(tangentViewDir, 1.0);
+				gl_FragColor = vec4(GET_NORMALMAP, 1.0);
 			#elif (DEBUG == DEBUG_PARALLAXSHIFT)
 				float tdl = length(texDiff.xy) * 10.0;
 				gl_FragColor = vec4( normalize(vec3(texDiff.x, texDiff.y, 0.0)) * vec3(tdl) , 1.0);
@@ -809,6 +835,8 @@ return {
 				gl_FragColor = vec4(diffuseColor, 1.0);
 			#elif (DEBUG == DEBUG_SPECULARCOLOR)
 				gl_FragColor = vec4(specularColor, 1.0);
+			#elif (DEBUG == DEBUG_SPECULARANDDIFFUSECOLOR)
+				gl_FragColor = vec4(diffuseColor + specularColor, 1.0);
 			#elif (DEBUG == DEBUG_EMISSIONCOLOR)
 				gl_FragColor = vec4(emissive, 1.0);
 			#elif (DEBUG == DEBUG_TEAMCOLOR)
@@ -821,16 +849,29 @@ return {
 				gl_FragColor = vec4(vec3(metallic), 1.0);
 			#elif (DEBUG == DEBUG_REFLECTIONDIR)
 				gl_FragColor = vec4(reflection, 1.0);
+			#elif (DEBUG == DEBUG_REFLECTIONLENGTH)
+				gl_FragColor = vec4(reflection.ggg, 1.0);
 			#elif (DEBUG == DEBUG_SPECWORLDREFLECTION)
-				gl_FragColor = vec4( texture(specularEnvTex, n).rgb, 1.0 );
+				gl_FragColor = vec4( textureLod(specularEnvTex, n, 0.0).rgb, 1.0 );
 			#elif (DEBUG == DEBUG_SPECVIEWREFLECTION)
-				gl_FragColor = vec4( texture(specularEnvTex, reflection).rgb, 1.0 );
+				gl_FragColor = vec4( textureLod(specularEnvTex, reflection, 0.0).rgb, 1.0 );
 			#elif (DEBUG == DEBUG_DIFFUSEWORLDREFLECTION)
-				gl_FragColor = vec4( texture(diffuseEnvTex, n).rgb, 1.0 );
-			#elif (DEBUG == DEBUG_IBLSPECULAR)
+				gl_FragColor = vec4( textureLod(diffuseEnvTex, n, 0.0).rgb, 1.0 );
+			#elif (DEBUG == DEBUG_IBLSPECULARCOLOR)
 				gl_FragColor = vec4( iblSpecular, 1.0 );
-			#elif (DEBUG == DEBUG_IBLDIFFUSE)
+			#elif (DEBUG == DEBUG_IBLDIFFUSECOLOR)
 				gl_FragColor = vec4( iblDiffuse, 1.0 );
+			#elif (DEBUG == DEBUG_IBLSPECULARANDDIFFUSECOLOR)
+				gl_FragColor = vec4( iblSpecular + iblDiffuse, 1.0 );
+			#elif (DEBUG == DEBUG_SHADOWCOEFF1)
+				//float offset_scale_N = sqrt(1 - NdotL * NdotL); // sin(acos(L·N))
+				//gl_FragColor = vec4( vec3(offset_scale_N), 1.0 );
+				gl_FragColor = vec4( vec3( (1.0 - LdotV) * (1.0 - NdotL) ), 1.0 );
+			#elif (DEBUG == DEBUG_SHADOWCOEFF2)
+				float offset_scale_N = sqrt(1 - NdotL * NdotL); // sin(acos(L·N))
+				float offset_scale_L = offset_scale_N / NdotL;    // tan(acos(L·N))
+				offset_scale_L = min(2.0, offset_scale_L);
+				gl_FragColor = vec4( vec3(offset_scale_L/2.0), 1.0 );
 			#elif (DEBUG == DEBUG_SHADOW)
 				gl_FragColor = vec4( vec3(shadow), 1.0 );
 			#elif (DEBUG == DEBUG_PREEXPCOLOR)
@@ -856,15 +897,9 @@ return {
 		specularEnvTex = 8,
 	},
 	uniformFloat = {
-		-- sunDir = {gl.GetSun("pos")}, -- material has sunDirLoc
-		--sunAmbient = {gl.GetSun("ambient" ,"unit")},
-		--sunDiffuse = {gl.GetSun("diffuse" ,"unit")},
-		--sunColor = {gl.GetSun("diffuse" ,"unit")},
 		sunColor = {1.0, 1.0, 1.0},
 		shadowDensity = {gl.GetSun("shadowDensity" ,"unit")},
-		-- shadowParams  = {gl.GetShadowMapParams()}, -- material has shadowParamsLoc
 	},
 	uniformMatrix = {
-	-- shadowMatrix = {gl.GetMatrixData("shadow")}, -- material has shadow{Matrix}Loc
 	},
 }

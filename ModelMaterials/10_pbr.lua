@@ -11,10 +11,13 @@ local function DrawUnit(unitID, material, drawMode)
 			if not uniformData.location then
 				uniformData.location = gl.GetUniformLocation(curShader, uniformData.name)
 			end
-			if uniformData.isTable then
+			local valType = type(uniformData.value)
+			if valType == "table" then
 				gl.Uniform(uniformData.location, unpack(uniformData.value))
-			else
+			elseif valType == "number" then
 				gl.Uniform(uniformData.location, uniformData.value)
+			else
+				Spring.Echo("Wrong 10_pbr shader uniform type for uniform " .. uniformData.name)
 			end
 		end
 		local gf = Spring.GetGameFrame()
@@ -63,10 +66,10 @@ local pbrMaterialValues = {
 	["baseColorMap.get"] = function(pbr) return (pbr.baseColorMap or {}).get or nil end,
 	["baseColorMap.gammaCorrection"] = function(pbr) return ((pbr.baseColorMap or {}).gammaCorrection == nil and true) or pbr.baseColorMap.gammaCorrection end,
 
-	["normalMap.scale"] = function(pbr) return (pbr.normalMap or {}).scale or 1.0 end,
+	["normalMap.scale"] = function(pbr) return (pbr.normalMap or {}).scale or {1.0, 1.0, 1.0} end,
 	["normalMap.get"] = function(pbr) return (pbr.normalMap or {}).get or nil end,
-	["normalMap.gammaCorrection"] = function(pbr) return ((pbr.normalMap or {}).gammaCorrection == nil and true) or pbr.normalMap.gammaCorrection end,
-	["normalMap.hasTangents"] = function(pbr) return ((pbr.normalMap or {}).hasTangents == nil and true) or pbr.normalMap.hasTangents end,
+	["normalMap.gammaCorrection"] = function(pbr) return ((pbr.normalMap or {}).gammaCorrection == nil and false) or pbr.normalMap.gammaCorrection end,
+	["normalMap.hasTangents"] = function(pbr) return ((pbr.normalMap or {}).hasTangents == nil and false) or pbr.normalMap.hasTangents end,
 
 	["parallaxMap.fast"] = function(pbr) return ((pbr.parallaxMap or {}).fast == nil and true) or pbr.parallaxMap.fast end,
 	["parallaxMap.perspective"] = function(pbr) return ((pbr.parallaxMap or {}).perspective == nil and false) or pbr.parallaxMap.perspective end,
@@ -75,9 +78,37 @@ local pbrMaterialValues = {
 	["parallaxMap.get"] = function(pbr) return (pbr.parallaxMap or {}).get or nil end,
 	["parallaxMap.gammaCorrection"] = function(pbr) return ((pbr.parallaxMap or {}).gammaCorrection == nil and false) or pbr.parallaxMap.gammaCorrection end,
 
-	["emissiveMap.scale"] = function(pbr) return (pbr.emissiveMap or {}).scale or ((getNumberOfChannels(pbrMaterialValues["emissiveMap.get"](pbr)) == 1 and 1.0) or {1.0, 1.0, 1.0}) end,
+	["emissiveMap.scale"] = function(pbr)
+			if (pbr.emissiveMap or {}).scale then
+				return (pbr.emissiveMap or {}).scale
+			end
+			local emMapGet = (pbr.emissiveMap or {}).get
+			if emMapGet then
+				local nCh = getNumberOfChannels(emMapGet)
+				if nCh == 1 then
+					return 1.0
+				elseif nCh == 3 then
+					return {1.0, 1.0, 1.0}
+				end
+			end
+			return nil
+		end,
 	["emissiveMap.get"] = function(pbr) return (pbr.emissiveMap or {}).get or nil end,
-	["emissiveMap.gammaCorrection"] = function(pbr) return ((pbr.emissiveMap or {}).gammaCorrection == nil and true) or pbr.emissiveMap.gammaCorrection end,
+	["emissiveMap.gammaCorrection"] = function(pbr)
+			if (pbr.emissiveMap or {}).gammaCorrection then
+				return (pbr.emissiveMap or {}).gammaCorrection
+			end
+			local emMapGet = (pbr.emissiveMap or {}).get
+			if emMapGet then
+				local nCh = getNumberOfChannels(emMapGet)
+				if nCh == 1 then
+					return false -- multiplier workflow, no need for gamma correction
+				elseif nCh == 3 then
+					return true -- color workflow, needs gamma correction
+				end
+			end
+			return nil
+		end,
 
 	["occlusionMap.scale"] = function(pbr) return (pbr.occlusionMap or {}).scale or 1.0 end,
 	["occlusionMap.get"] = function(pbr) return (pbr.occlusionMap or {}).get or nil end,
@@ -91,10 +122,11 @@ local pbrMaterialValues = {
 	["metallicMap.get"] = function(pbr) return (pbr.metallicMap or {}).get or nil end,
 	["metallicMap.gammaCorrection"] = function(pbr) return ((pbr.metallicMap or {}).gammaCorrection == nil and false) or pbr.metallicMap.gammaCorrection end,
 
+	["iblMap.invToneMapExp"] = function(pbr) return (pbr.iblMap or {}).invToneMapExp or nil end,
 	["iblMap.scale"] = function(pbr) return (pbr.iblMap or {}).scale or 1.0 end,
 	["iblMap.get"] = function(pbr) return (pbr.iblMap or {}).get or nil end,
 	["iblMap.lod"] = function(pbr) return ((pbr.iblMap or {}).lod == nil and false) or pbr.iblMap.lod end,
-	["iblMap.gammaCorrection"] = function(pbr) return ((pbr.iblMap or {}).gammaCorrection == nil and false) or pbr.iblMap.gammaCorrection end,
+	["iblMap.gammaCorrection"] = function(pbr) return ((pbr.iblMap or {}).gammaCorrection == nil and true) or pbr.iblMap.gammaCorrection end,
 
 	["exposure"] = function(pbr) return pbr.exposure or 1.0 end,
 	["toneMapping"] = function(pbr) return pbr.toneMapping or nil end,
@@ -108,21 +140,25 @@ local pbrDebug = { -- Debug output. Will replace output color if enabled
 	worldNormals = false,
 	viewNormals = false,
 	tangentNormals = false,
-	tangentViewDir = false,
 	parallaxShift = false,
 	diffuseColor = false,
 	specularColor = false,
+	specularAndDiffuseColor = false,
 	emissionColor = false,
 	teamColor = false,
 	occlusion = false,
 	roughness = false,
 	metallic = false,
 	reflectionDir = false,
+	reflectionLength = false,
 	specWorldReflection = false,
 	specViewReflection = false,
 	diffuseWorldReflection = false,
-	iblSpecular = false,
-	iblDiffuse = false,
+	iblSpecularColor = false,
+	iblDiffuseColor = false,
+	iblSpecularAndDiffuseColor = false,
+	shadowCoeff1 = false,
+	shadowCoeff2 = false,
 	shadow = false,
 	preExpColor = false,
 	tmColor = false,
@@ -165,6 +201,7 @@ function tableConcat(dest, source)
 end
 
 local function parsePbrMatParams(pbr)
+
 	local shaderDefinitions = {
 		"#version 150 compatibility",
 		"#define deferred_mode 0",
@@ -185,16 +222,10 @@ local function parsePbrMatParams(pbr)
 		local define = {}
 		local uniform = {}
 
-		for k, v in pairs(pbrDebug) do
-			if v then
-				table.insert(define, string.format("#define DEBUG DEBUG_%s", string.upper(k)))
-			end
-		end
-
 		if pntIdx then
 			local first  = string.sub(key, 1, pntIdx - 1)
 			local second = string.sub(key, pntIdx + 1)
-			--Spring.Echo(key, first, second, val)
+			Spring.Echo(key, first, second, val)
 			if first == "parallaxMap" and second == "get" and val then
 				local texUnitNum = string.match(val, "%[(%d-)%]")
 				local texChannel = string.match(val, "%.(%a)")
@@ -203,8 +234,6 @@ local function parsePbrMatParams(pbr)
 				table.insert(define, "#define PARALLAXMAP_LIMITS PARALLAXMAP_LIMITS_MANUAL")
 			elseif first == "parallaxMap" and second == "limits" and val and valType == "boolean" then
 				table.insert(define, "#define PARALLAXMAP_LIMITS PARALLAXMAP_LIMITS_AUTO")
-			elseif first == "debug" and val and valType == "boolean" then
-				table.insert(define, string.format("#define DEBUG DEBUG_%s", string.upper(second)))
 			else
 				if second == "get" and val then
 					if first == "emissiveMap" then
@@ -225,6 +254,8 @@ local function parsePbrMatParams(pbr)
 					table.insert(define, "#define SRGB_" .. string.upper(first))
 				elseif second == "hasTangents" and val then
 					table.insert(define, "#define " .. camelToUnderline(second))
+				elseif second == "invToneMapExp" and valType == "number" then
+					table.insert(define, "#define IBL_INVTONEMAP")
 				elseif second == "lod" and val then
 					if valType == "boolean" then
 						table.insert(define, "#define IBL_TEX_LOD IBL_TEX_LOD_AUTO") --automatic definition of max LOD
@@ -238,24 +269,28 @@ local function parsePbrMatParams(pbr)
 				end
 			end
 
-			if second == "scale" or second == "strength" then
+			if (second == "scale" or second == "strength") and val then
 				table.insert(uniform, {
 					name = first .. second:gsub("^%l", string.upper),
-					isTable = (valType == "table"),
 					value = val,
 					location = nil,
 				})
 			elseif second == "lod" and valType == "number" then
 				table.insert(uniform, {
 					name = first .. second:gsub("%l", string.upper),
-					isTable = (valType == "table"),
 					value = val,
 					location = nil,
 				})
 			elseif second == "limits" and val and valType == "table" then
 				table.insert(uniform, {
 					name = first .. second:gsub("^%l", string.upper),
-					isTable = (valType == "table"),
+					value = val,
+					location = nil,
+				})
+			elseif second == "invToneMapExp" and valType == "number" then
+				Spring.Echo("invToneMapExpinvToneMapExpinvToneMapExpinvToneMapExpinvToneMapExpinvToneMapExpinvToneMapExpinvToneMapExpinvToneMapExpinvToneMapExp", first .. second:gsub("^%l", string.upper), val)
+				table.insert(uniform, {
+					name = first .. second:gsub("^%l", string.upper),
 					value = val,
 					location = nil,
 				})
@@ -272,7 +307,6 @@ local function parsePbrMatParams(pbr)
 			elseif valType == "number" then
 				table.insert(uniform, {
 					name = key,
-					isTable = (valType == "table"),
 					value = val,
 					location = nil,
 				})
@@ -281,7 +315,6 @@ local function parsePbrMatParams(pbr)
 					table.insert(define, "#define " .. camelToUnderline(key))
 				elseif valType == "string" then
 					table.insert(define, string.format("#define %s %s_%s", string.upper(key), string.upper(key), string.upper(val)))
-					Spring.Echo("!!!!!!!!!!!", string.format("#define %s %s_%s", string.upper(key), string.upper(key), string.upper(val)))
 				end
 			end
 		end
@@ -290,11 +323,28 @@ local function parsePbrMatParams(pbr)
 			--Spring.Echo(key, val, "define", define)
 		end
 
-		if uniform then
+		if #uniform > 0 then
 			tableConcat(customStandardUniforms, uniform)
-			--Spring.Echo(key, val, "uniform", uniform)
+			Spring.Echo(key, val, "uniform", uniform.name, uniform.value)
 		end
 	end
+
+	local debugIdx = 1
+	for k, v in pairs(pbrDebug) do
+
+		local def = string.format("#define DEBUG_%s %d", string.upper(k), debugIdx)
+		table.insert(shaderDefinitions, def)
+		table.insert(deferredDefinitions, def)
+		debugIdx = debugIdx + 1
+
+		if v then
+			local def = string.format("#define DEBUG DEBUG_%s", string.upper(k))
+			table.insert(shaderDefinitions, def)
+			table.insert(deferredDefinitions, def)
+		end
+
+	end
+
 	return shaderDefinitions, deferredDefinitions, customStandardUniforms, customDefferedUniforms
 end
 
@@ -316,6 +366,17 @@ local function getPbrMaterialIndex(pbr)
 	return hashValue
 end
 
+local MAPSIDE_MAPINFO = "mapinfo.lua"
+local mapInfo = VFS.FileExists(MAPSIDE_MAPINFO) and VFS.Include(MAPSIDE_MAPINFO) or false
+
+local irradianceMap, specularMap
+local function getScenePBRParams()
+	local pbrMap = (mapInfo.custom or {}).pbr
+	if pbrMap then
+
+	end
+end
+
 local function createNewMatDef(pbr)
 	local shaderDefinitions, deferredDefinitions, customStandardUniforms, customDefferedUniforms = parsePbrMatParams(pbr)
 
@@ -335,9 +396,9 @@ local function createNewMatDef(pbr)
 			[3] = "%TEX3",
 			--[4] = "%TEX4",
 			[5] = "%BRDF",
-			[6] = '$shadow',
-			[7] = '$reflection', --TODO replace with radiance map!!!
-			[8] = '$reflection',
+			[6] = "$shadow",
+			[7] = "$reflection", --TODO replace with radiance map!!!
+			[8] = "$reflection",
 		},
 		DrawUnit = DrawUnit,
 		--UnitCreated = UnitCreated,
