@@ -121,6 +121,7 @@ return {
 		#define TONEMAPPING_ACES 1
 		#define TONEMAPPING_UNCHARTED2 2
 		#define TONEMAPPING_FILMIC 3
+		#define TONEMAPPING_REINHARD 4
 
 		uniform vec3 sunPos;
 		uniform vec3 sunColor;
@@ -139,8 +140,16 @@ return {
 		#endif
 
 		#ifdef GET_IBLMAP
-			uniform samplerCube specularEnvTex;
-			uniform samplerCube diffuseEnvTex;
+			#ifdef HAS_SPECULARMAP
+				uniform sampler2D specularEnvTex;
+			#else
+				uniform samplerCube specularEnvTex;
+			#endif
+			#ifdef HAS_IRRADIANCEMAP
+				uniform sampler2D irradianceEnvTex;
+			#else
+				uniform samplerCube irradianceEnvTex;
+			#endif
 			#if (IBL_TEX_LOD == IBL_TEX_LOD_MANUAL) //manual LOD
 				uniform float iblMapLOD;
 			#endif
@@ -200,7 +209,9 @@ return {
 
 		vec4 texels[4]; //change to something else if more/less base textures are required
 
-		const float M_PI = 3.141592653589793;
+		//const float M_PI = 3.141592653589793;
+		const float M_PI = 3.1415926535897932384626433832795028841971693993751058209749445923078164062;
+		const float M_PI2 = M_PI * 2.0;
 		const float MINROUGHNESS = 0.04;
 
 		in Data {
@@ -340,6 +351,10 @@ return {
 			return fromSRGB(outColor); //sadly FilmicTM outputs gamma corrected colors, so need to reverse that effect
 		}
 
+		vec3 ReinhardTM(in vec3 x) {
+			return x / (vec3(1.) + x);
+		}
+
 		const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 
 		vec3 expExpand(in vec3 x, in float cutoff, in float mul) {
@@ -405,6 +420,24 @@ return {
 			return worldFragNormal;
 		}
 
+		vec4 rgbeToLinear(in vec4 rgbe) {
+			return vec4(rgbe.rgb * exp2( rgbe.a * 255.0 - 128.0 ), 1.0);
+		}
+
+		vec4 sampleEquiRect(in sampler2D tex, in vec3 direction) {
+			vec3 directionN = normalize(direction);
+			vec2 uv = vec2((atan(directionN.z, directionN.x) / M_PI2) + 0.5, acos(directionN.y) / M_PI);
+			uv = clamp(uv, vec2(0.0), vec2(1.0));
+			//vec4 rgbe = texture(tex, uv, -2.0);
+			vec4 rgbe = textureLod(tex, uv, 0.0);
+			return rgbeToLinear(rgbe);
+		}
+
+		vec4 sampleEquiRectLod(in sampler2D tex, in vec3 direction, in float lod) {
+			vec3 directionN = normalize(direction);
+			vec4 rgbe = textureLod(tex, vec2((atan(directionN.z, directionN.x) / M_PI2) + 0.5, acos(directionN.y) / M_PI), lod);
+			return rgbeToLinear(rgbe);
+		}
 
 		void getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection, out vec3 diffuse, out vec3 specular)
 		{
@@ -412,22 +445,35 @@ return {
 			specular = vec3(iblMapScale.y);
 
 			#ifdef GET_IBLMAP
-				#if 0 // TODO remove this when irradiance map / diffuseEnvTex is bound to something good
-					vec3 diffuseLight = texture(diffuseEnvTex, n).rgb;
+				#if 0 // TODO remove this when irradianceEnvTex is bound to something good
+					#ifdef HAS_IRRADIANCEMAP
+						vec3 diffuseLight = sampleEquiRect(irradianceEnvTex, n).rgb;
+					#else
+						vec3 diffuseLight = texture(irradianceEnvTex, n).rgb;
+					#endif
+
 					#ifdef SRGB_IBLMAP
 						diffuseLight = fromSRGB(diffuseLight);
 					#endif
 				#else
-					ivec2 diffuseEnvTexSize = textureSize(diffuseEnvTex, 0);
-					float iblDiffMapLOD = log2(float(max(diffuseEnvTexSize.x, diffuseEnvTexSize.y)));
-					vec3 diffuseLight = textureLod(diffuseEnvTex, n, iblDiffMapLOD - 4.0).rgb;
+					ivec2 irradianceEnvTexSize = textureSize(irradianceEnvTex, 0);
+					float iblDiffMapLOD = log2(float(max(irradianceEnvTexSize.x, irradianceEnvTexSize.y)));
+					#ifdef HAS_IRRADIANCEMAP
+						vec3 diffuseLight = sampleEquiRectLod(irradianceEnvTex, n, iblDiffMapLOD - 4.0).rgb;
+					#else
+						vec3 diffuseLight = textureLod(irradianceEnvTex, n, iblDiffMapLOD - 4.0).rgb;
+					#endif
 
 					#ifdef SRGB_IBLMAP
 						diffuseLight = fromSRGB(diffuseLight);
 					#endif
 
 					#ifdef IBL_INVTONEMAP
-						float avgDLum = dot(LUMA, textureLod(diffuseEnvTex, n, iblDiffMapLOD).rgb);
+						#ifdef HAS_IRRADIANCEMAP
+							float avgDLum = dot(LUMA, sampleEquiRectLod(irradianceEnvTex, n, iblDiffMapLOD).rgb);
+						#else
+							float avgDLum = dot(LUMA, textureLod(irradianceEnvTex, n, iblDiffMapLOD).rgb);
+						#endif
 						diffuseLight = expExpand(diffuseLight, avgDLum, iblMapInvToneMapExp);
 					#endif
 
@@ -443,9 +489,17 @@ return {
 
 				#ifdef IBL_TEX_LOD
 					float lod = (pbrInputs.roughness * iblMapLOD);
-					vec3 specularLight = textureLod(specularEnvTex, reflection, lod).rgb;
+					#ifdef HAS_SPECULARMAP
+						vec3 specularLight = sampleEquiRectLod(specularEnvTex, reflection, lod).rgb;
+					#else
+						vec3 specularLight = textureLod(specularEnvTex, reflection, lod).rgb;
+					#endif
 				#else
-					vec3 specularLight = texture(specularEnvTex, reflection).rgb;
+					#ifdef HAS_SPECULARMAP
+						vec3 specularLight = sampleEquiRect(specularEnvTex, reflection).rgb;
+					#else
+						vec3 specularLight = texture(specularEnvTex, reflection).rgb;
+					#endif
 				#endif
 
 				#ifdef SRGB_IBLMAP
@@ -454,7 +508,11 @@ return {
 
 				#ifdef IBL_INVTONEMAP
 					float iblSpecMapLOD = log2(float(max(specularEnvTexSize.x, specularEnvTexSize.y)));
-					float avgSLum = dot(LUMA, textureLod(specularEnvTex, reflection, iblSpecMapLOD).rgb);
+					#ifdef HAS_SPECULARMAP
+						float avgSLum = dot(LUMA, sampleEquiRectLod(specularEnvTex, reflection, iblSpecMapLOD).rgb);
+					#else
+						float avgSLum = dot(LUMA, textureLod(specularEnvTex, reflection, iblSpecMapLOD).rgb);
+					#endif
 					specularLight = expExpand(specularLight, avgSLum, iblMapInvToneMapExp);
 				#endif
 
@@ -808,6 +866,8 @@ return {
 				vec3 tmColor = Uncharted2TM(preExpColor);
 			#elif (TONEMAPPING == TONEMAPPING_FILMIC)
 				vec3 tmColor = FilmicTM(preExpColor);
+			#elif (TONEMAPPING == TONEMAPPING_REINHARD)
+				vec3 tmColor = ReinhardTM(preExpColor);
 			#else
 				vec3 tmColor = preExpColor;
 			#endif
@@ -852,11 +912,23 @@ return {
 			#elif (DEBUG == DEBUG_REFLECTIONLENGTH)
 				gl_FragColor = vec4(reflection.ggg, 1.0);
 			#elif (DEBUG == DEBUG_SPECWORLDREFLECTION)
-				gl_FragColor = vec4( textureLod(specularEnvTex, n, 0.0).rgb, 1.0 );
+				#ifdef HAS_SPECULARMAP
+					gl_FragColor = vec4( sampleEquiRectLod(specularEnvTex, n, 0.0).rgb, 1.0 );
+				#else
+					gl_FragColor = vec4( textureLod(specularEnvTex, n, 0.0).rgb, 1.0 );
+				#endif
 			#elif (DEBUG == DEBUG_SPECVIEWREFLECTION)
-				gl_FragColor = vec4( textureLod(specularEnvTex, reflection, 0.0).rgb, 1.0 );
-			#elif (DEBUG == DEBUG_DIFFUSEWORLDREFLECTION)
-				gl_FragColor = vec4( textureLod(diffuseEnvTex, n, 0.0).rgb, 1.0 );
+				#ifdef HAS_SPECULARMAP
+					gl_FragColor = vec4( sampleEquiRectLod(specularEnvTex, reflection, 0.0).rgb, 1.0 );
+				#else
+					gl_FragColor = vec4( textureLod(specularEnvTex, reflection, 0.0).rgb, 1.0 );
+				#endif
+			#elif (DEBUG == DEBUG_IRRADIANCEWORLDREFLECTION)
+				#ifdef HAS_IRRADIANCEMAP
+					gl_FragColor = vec4( sampleEquiRectLod(irradianceEnvTex, n, 0.0).rgb, 1.0 );
+				#else
+					gl_FragColor = vec4( textureLod(irradianceEnvTex, n, 0.0).rgb, 1.0 );
+				#endif
 			#elif (DEBUG == DEBUG_IBLSPECULARCOLOR)
 				gl_FragColor = vec4( iblSpecular, 1.0 );
 			#elif (DEBUG == DEBUG_IBLDIFFUSECOLOR)
@@ -893,7 +965,7 @@ return {
 		--tex4 = 4,
 		brdfLUT = 5,
 		shadowTex = 6,
-		diffuseEnvTex = 7,
+		irradianceEnvTex = 7,
 		specularEnvTex = 8,
 	},
 	uniformFloat = {

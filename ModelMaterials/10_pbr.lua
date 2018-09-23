@@ -4,6 +4,10 @@ local reflectionDraw = 3
 local refractionDraw = 4
 local gameDeferredDraw = 5
 
+local MAPSIDE_MAPINFO = "mapinfo.lua"
+local mapInfo = VFS.FileExists(MAPSIDE_MAPINFO) and VFS.Include(MAPSIDE_MAPINFO) or {}
+local pbrMap = (mapInfo.custom or {}).pbr
+
 local function DrawUnit(unitID, material, drawMode)
 	if drawMode == normalDraw and material.customStandardUniforms then
 		local curShader = material.standardShader
@@ -17,7 +21,7 @@ local function DrawUnit(unitID, material, drawMode)
 			elseif valType == "number" then
 				gl.Uniform(uniformData.location, uniformData.value)
 			else
-				Spring.Echo("Wrong 10_pbr shader uniform type for uniform " .. uniformData.name)
+				Spring.Echo(string.format("10_pbr.lua: Wrong shader uniform type (%s) for uniform (%s)", valType, uniformData.name))
 			end
 		end
 		local gf = Spring.GetGameFrame()
@@ -56,33 +60,45 @@ local function getNumberOfChannels(val)
 	return nil
 end
 
+local function getBooleanValue(obj, default)
+	return (obj == nil and default) or obj
+end
+
+function tableConcat(dest, source)
+    for key, data in ipairs(source) do
+        table.insert(dest, data)
+    end
+    return dest
+end
+
 local pbrMaterialValues = {
-	["flipUV"] = function(pbr) return ((pbr.flipUV == nil) and true) or pbr.flipUV end,
-	["fastGamma"] = function(pbr) return ((pbr.fastGamma == nil) and false) or pbr.fastGamma end,
-	["pbrWorkflow"] = function(pbr) return pbr.pbrWorkflow or "metallic" end,
-	["tbnReortho"] = function(pbr) return ((pbr.tbnReortho == nil) and true) or pbr.tbnReortho end,
+	["flipUV"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.flipUV, true) end,
+	["fastGamma"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.fastGamma, false) end,
+	["pbrWorkflow"] = function(pbrModel, pbrMap) return pbrModel.pbrWorkflow or "metallic" end,
+	["tbnReortho"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.tbnReortho, true) end,
 
-	["baseColorMap.scale"] = function(pbr) return (pbr.baseColorMap or {}).scale or {1.0, 1.0, 1.0, 1.0} end,
-	["baseColorMap.get"] = function(pbr) return (pbr.baseColorMap or {}).get or nil end,
-	["baseColorMap.gammaCorrection"] = function(pbr) return ((pbr.baseColorMap or {}).gammaCorrection == nil and true) or pbr.baseColorMap.gammaCorrection end,
+	["baseColorMap.scale"] = function(pbrModel, pbrMap) return pbrModel.baseColorMap.scale or {1.0, 1.0, 1.0, 1.0} end,
+	["baseColorMap.get"] = function(pbrModel, pbrMap) return pbrModel.baseColorMap.get or nil end,
+	["baseColorMap.gammaCorrection"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.baseColorMap.gammaCorrection, true) end,
 
-	["normalMap.scale"] = function(pbr) return (pbr.normalMap or {}).scale or {1.0, 1.0, 1.0} end,
-	["normalMap.get"] = function(pbr) return (pbr.normalMap or {}).get or nil end,
-	["normalMap.gammaCorrection"] = function(pbr) return ((pbr.normalMap or {}).gammaCorrection == nil and false) or pbr.normalMap.gammaCorrection end,
-	["normalMap.hasTangents"] = function(pbr) return ((pbr.normalMap or {}).hasTangents == nil and false) or pbr.normalMap.hasTangents end,
+	["normalMap.scale"] = function(pbrModel, pbrMap) return pbrModel.normalMap.scale or {1.0, 1.0, 1.0} end,
+	["normalMap.get"] = function(pbrModel, pbrMap) return pbrModel.normalMap.get or nil end,
+	["normalMap.gammaCorrection"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.normalMap.gammaCorrection, false) end,
+	["normalMap.hasTangents"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.normalMap.hasTangents, true) end,
 
-	["parallaxMap.fast"] = function(pbr) return ((pbr.parallaxMap or {}).fast == nil and true) or pbr.parallaxMap.fast end,
-	["parallaxMap.perspective"] = function(pbr) return ((pbr.parallaxMap or {}).perspective == nil and false) or pbr.parallaxMap.perspective end,
-	["parallaxMap.limits"] = function(pbr) return (pbr.parallaxMap or {}).limits or nil end,
-	["parallaxMap.scale"] = function(pbr) return (pbr.parallaxMap or {}).scale or 0.01 end,
-	["parallaxMap.get"] = function(pbr) return (pbr.parallaxMap or {}).get or nil end,
-	["parallaxMap.gammaCorrection"] = function(pbr) return ((pbr.parallaxMap or {}).gammaCorrection == nil and false) or pbr.parallaxMap.gammaCorrection end,
+	["parallaxMap.scale"] = function(pbrModel, pbrMap) return pbrModel.parallaxMap.scale or 0.01 end,
+	["parallaxMap.get"] = function(pbrModel, pbrMap) return pbrModel.parallaxMap.get or nil end,
+	["parallaxMap.gammaCorrection"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.parallaxMap.gammaCorrection, false) end,
+	["parallaxMap.fast"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.parallaxMap.fast, false) end,
+	["parallaxMap.perspective"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.parallaxMap.perspective, false) end,
+	["parallaxMap.limits"] = function(pbrModel, pbrMap) return pbrModel.parallaxMap.limits or nil end,
 
-	["emissiveMap.scale"] = function(pbr)
-			if (pbr.emissiveMap or {}).scale then
-				return (pbr.emissiveMap or {}).scale
+
+	["emissiveMap.scale"] = function(pbrModel, pbrMap)
+			if pbrModel.emissiveMap.scale then
+				return pbrModel.emissiveMap.scale
 			end
-			local emMapGet = (pbr.emissiveMap or {}).get
+			local emMapGet = pbrModel.emissiveMap.get
 			if emMapGet then
 				local nCh = getNumberOfChannels(emMapGet)
 				if nCh == 1 then
@@ -93,12 +109,12 @@ local pbrMaterialValues = {
 			end
 			return nil
 		end,
-	["emissiveMap.get"] = function(pbr) return (pbr.emissiveMap or {}).get or nil end,
-	["emissiveMap.gammaCorrection"] = function(pbr)
-			if (pbr.emissiveMap or {}).gammaCorrection then
-				return (pbr.emissiveMap or {}).gammaCorrection
+	["emissiveMap.get"] = function(pbrModel, pbrMap) return pbrModel.emissiveMap.get or nil end,
+	["emissiveMap.gammaCorrection"] = function(pbrModel, pbrMap)
+			if pbrModel.emissiveMap.gammaCorrection then
+				return pbrModel.emissiveMap.gammaCorrection
 			end
-			local emMapGet = (pbr.emissiveMap or {}).get
+			local emMapGet = pbrModel.emissiveMap.get
 			if emMapGet then
 				local nCh = getNumberOfChannels(emMapGet)
 				if nCh == 1 then
@@ -110,30 +126,62 @@ local pbrMaterialValues = {
 			return nil
 		end,
 
-	["occlusionMap.scale"] = function(pbr) return (pbr.occlusionMap or {}).scale or 1.0 end,
-	["occlusionMap.get"] = function(pbr) return (pbr.occlusionMap or {}).get or nil end,
-	["occlusionMap.gammaCorrection"] = function(pbr) return ((pbr.occlusionMap or {}).gammaCorrection == nil and false) or pbr.occlusionMap.gammaCorrection end,
+	["occlusionMap.scale"] = function(pbrModel, pbrMap) return pbrModel.occlusionMap.scale or 1.0 end,
+	["occlusionMap.get"] = function(pbrModel, pbrMap) return pbrModel.occlusionMap.get or nil end,
+	["occlusionMap.gammaCorrection"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.occlusionMap.gammaCorrection, false) end,
 
-	["roughnessMap.scale"] = function(pbr) return (pbr.roughnessMap or {}).scale or 1.0 end,
-	["roughnessMap.get"] = function(pbr) return (pbr.roughnessMap or {}).get or nil end,
-	["roughnessMap.gammaCorrection"] = function(pbr) return ((pbr.roughnessMap or {}).gammaCorrection == nil and false) or pbr.roughnessMap.gammaCorrection end,
+	["roughnessMap.scale"] = function(pbrModel, pbrMap) return pbrModel.roughnessMap.scale or 1.0 end,
+	["roughnessMap.get"] = function(pbrModel, pbrMap) return pbrModel.roughnessMap.get or nil end,
+	["roughnessMap.gammaCorrection"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.roughnessMap.gammaCorrection, false) end,
 
-	["metallicMap.scale"] = function(pbr) return (pbr.metallicMap or {}).scale or 1.0 end,
-	["metallicMap.get"] = function(pbr) return (pbr.metallicMap or {}).get or nil end,
-	["metallicMap.gammaCorrection"] = function(pbr) return ((pbr.metallicMap or {}).gammaCorrection == nil and false) or pbr.metallicMap.gammaCorrection end,
+	["metallicMap.scale"] = function(pbrModel, pbrMap) return pbrModel.metallicMap.scale or 1.0 end,
+	["metallicMap.get"] = function(pbrModel, pbrMap) return pbrModel.metallicMap.get or nil end,
+	["metallicMap.gammaCorrection"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.metallicMap.gammaCorrection, false) end,
 
-	["iblMap.invToneMapExp"] = function(pbr) return (pbr.iblMap or {}).invToneMapExp or nil end,
-	["iblMap.scale"] = function(pbr) return (pbr.iblMap or {}).scale or 1.0 end,
-	["iblMap.get"] = function(pbr) return (pbr.iblMap or {}).get or nil end,
-	["iblMap.lod"] = function(pbr) return ((pbr.iblMap or {}).lod == nil and false) or pbr.iblMap.lod end,
-	["iblMap.gammaCorrection"] = function(pbr) return ((pbr.iblMap or {}).gammaCorrection == nil and true) or pbr.iblMap.gammaCorrection end,
+	["iblMap.scale"] = function(pbrModel, pbrMap) return pbrMap.iblMap.scale or pbrModel.iblMap.scale or 1.0 end,
+	["iblMap.get"] = function(pbrModel, pbrMap) return pbrMap.iblMap.get or pbrModel.iblMap.get or nil end,
+	["iblMap.gammaCorrection"] = function(pbrModel, pbrMap) return getBooleanValue(pbrMap.iblMap.gammaCorrection, getBooleanValue(pbrModel.iblMap.gammaCorrection, false)) end,
+	["iblMap.lod"] = function(pbrModel, pbrMap) return pbrMap.iblMap.lod or pbrModel.iblMap.lod or nil end,
+	["iblMap.invToneMapExp"] = function(pbrModel, pbrMap) return pbrMap.iblMap.invToneMapExp or pbrModel.iblMap.invToneMapExp or nil end,
+	--["iblMap.customIrradianceMap"] = function(pbrModel, pbrMap) return pbrMap.iblMap.customIrradianceMap or pbrModel.iblMap.customIrradianceMap or nil end,
+	--["iblMap.customSpecularMap"] = function(pbrModel, pbrMap) return pbrMap.iblMap.customSpecularMap or pbrModel.iblMap.customSpecularMap or nil end,
 
-	["exposure"] = function(pbr) return pbr.exposure or 1.0 end,
-	["toneMapping"] = function(pbr) return pbr.toneMapping or nil end,
-	["gammaCorrection"] = function(pbr) return ((pbr.gammaCorrection == nil) and true) or pbr.gammaCorrection end,
+	["exposure"] = function(pbrModel, pbrMap) return pbrMap.exposure or pbrModel.exposure or 1.0 end,
+	["toneMapping"] = function(pbrModel, pbrMap) return pbrMap.toneMapping or pbrModel.toneMapping or nil end,
+	["gammaCorrection"] = function(pbrModel, pbrMap) return getBooleanValue(pbrMap.gammaCorrection, getBooleanValue(pbrModel.gammaCorrection, true)) end,
 
-	["texUnits"] = function(pbr) return pbr.texUnits or nil end,
+	["texUnits"] = function(pbrModel, pbrMap)
+		local allTexUnits = {}
+		for k, v in pairs(pbrMap.texUnits) do
+			allTexUnits[k] = v
+		end
+
+		--enable model override
+		for k, v in pairs(pbrModel.texUnits) do
+			allTexUnits[k] = v
+		end
+
+		return allTexUnits
+	end,
 }
+
+local function sanitizePbrInputs(pbrModel, pbrMap)
+	pbrModel = pbrModel or {}
+	pbrModel.baseColorMap = pbrModel.baseColorMap or {}
+	pbrModel.normalMap = pbrModel.normalMap or {}
+	pbrModel.parallaxMap = pbrModel.parallaxMap or {}
+	pbrModel.emissiveMap = pbrModel.emissiveMap or {}
+	pbrModel.occlusionMap = pbrModel.occlusionMap or {}
+	pbrModel.roughnessMap = pbrModel.roughnessMap or {}
+	pbrModel.metallicMap = pbrModel.metallicMap or {}
+	pbrModel.iblMap = pbrModel.iblMap or {}
+	pbrModel.texUnits = pbrModel.texUnits or {}
+
+	pbrMap = pbrMap or {}
+	pbrMap.iblMap = pbrMap.iblMap or {}
+	pbrMap.texUnits = pbrMap.texUnits or {}
+	return pbrModel, pbrMap
+end
 
 local pbrDebug = { -- Debug output. Will replace output color if enabled
 	baseColor = false,
@@ -153,7 +201,7 @@ local pbrDebug = { -- Debug output. Will replace output color if enabled
 	reflectionLength = false,
 	specWorldReflection = false,
 	specViewReflection = false,
-	diffuseWorldReflection = false,
+	irradianceWorldReflection = false,
 	iblSpecularColor = false,
 	iblDiffuseColor = false,
 	iblSpecularAndDiffuseColor = false,
@@ -173,9 +221,9 @@ local function camelToUnderline(str)
 	return string.upper(underString)
 end
 
-local function parseNewMatTexUnits(pbr)
+local function parseNewMatTexUnits(pbrModel, pbrMap)
 	local boundTexUnits = {}
-	local texUnitDefs = pbrMaterialValues["texUnits"](pbr)
+	local texUnitDefs = pbrMaterialValues["texUnits"](pbrModel, pbrMap)
 
 	for tu, fileSpec in pairs(texUnitDefs) do
 		local s, e = string.find(fileSpec, ":.-:")
@@ -190,17 +238,20 @@ local function parseNewMatTexUnits(pbr)
 		end
 	end
 
+	if not boundTexUnits["SPECULARMAP"] then
+		boundTexUnits["SPECULARMAP"] = "$reflection"
+	end
+
+	if not boundTexUnits["IRRADIANCEMAP"] then
+		boundTexUnits["IRRADIANCEMAP"] = "$reflection"
+	end
+
+	Spring.Utilities.TableEcho(boundTexUnits, "boundTexUnits")
+
 	return boundTexUnits
 end
 
-function tableConcat(dest, source)
-    for i, data in ipairs(source) do
-        table.insert(dest, data)
-    end
-    return dest
-end
-
-local function parsePbrMatParams(pbr)
+local function parsePbrMatParams(pbrModel, pbrMap)
 
 	local shaderDefinitions = {
 		"#version 150 compatibility",
@@ -215,7 +266,7 @@ local function parsePbrMatParams(pbr)
 	local customDefferedUniforms = {}
 
 	for key, valFunc in pairs(pbrMaterialValues) do
-		local val = valFunc(pbr)
+		local val = valFunc(pbrModel, pbrMap)
 		local valType = type(val)
 		local pntIdx = string.find(key, "%.")
 
@@ -225,7 +276,7 @@ local function parsePbrMatParams(pbr)
 		if pntIdx then
 			local first  = string.sub(key, 1, pntIdx - 1)
 			local second = string.sub(key, pntIdx + 1)
-			Spring.Echo(key, first, second, val)
+			--Spring.Echo(key, first, second, val)
 			if first == "parallaxMap" and second == "get" and val then
 				local texUnitNum = string.match(val, "%[(%d-)%]")
 				local texChannel = string.match(val, "%.(%a)")
@@ -237,7 +288,7 @@ local function parsePbrMatParams(pbr)
 			else
 				if second == "get" and val then
 					if first == "emissiveMap" then
-						local numCh = getNumberOfChannels(pbrMaterialValues["emissiveMap.get"](pbr))
+						local numCh = getNumberOfChannels(pbrMaterialValues["emissiveMap.get"](pbrModel, pbrMap))
 						if numCh and numCh == 1 then
 							table.insert(define, "#define EMISSIVEMAP_TYPE EMISSIVEMAP_TYPE_MULT")
 							table.insert(define, "#define GET_" .. string.upper(first) .. " texels" .. val)
@@ -288,7 +339,6 @@ local function parsePbrMatParams(pbr)
 					location = nil,
 				})
 			elseif second == "invToneMapExp" and valType == "number" then
-				Spring.Echo("invToneMapExpinvToneMapExpinvToneMapExpinvToneMapExpinvToneMapExpinvToneMapExpinvToneMapExpinvToneMapExpinvToneMapExpinvToneMapExp", first .. second:gsub("^%l", string.upper), val)
 				table.insert(uniform, {
 					name = first .. second:gsub("^%l", string.upper),
 					value = val,
@@ -298,10 +348,11 @@ local function parsePbrMatParams(pbr)
 		else
 			if key == "texUnits" then
 				for tu, fileSpec in pairs(val) do
+					--Spring.Echo("!!!!!!", tu, fileSpec)
 					local fileName = string.gsub(fileSpec, ":.-:", "")
 					local newFilePath = "unittextures/" .. fileName
 					if VFS.FileExists(newFilePath) then
-						table.insert(shaderDefinitions, "#define HAS_" .. tu)
+						table.insert(define, "#define HAS_" .. tu)
 					end
 				end
 			elseif valType == "number" then
@@ -319,13 +370,15 @@ local function parsePbrMatParams(pbr)
 			end
 		end
 		if #define > 0 then
-			tableConcat(shaderDefinitions, define)
+			shaderDefinitions = tableConcat(shaderDefinitions, define)
+			deferredDefinitions = tableConcat(deferredDefinitions, define)
 			--Spring.Echo(key, val, "define", define)
 		end
 
 		if #uniform > 0 then
-			tableConcat(customStandardUniforms, uniform)
-			Spring.Echo(key, val, "uniform", uniform.name, uniform.value)
+			customStandardUniforms = tableConcat(customStandardUniforms, uniform)
+			customDefferedUniforms = tableConcat(customDefferedUniforms, uniform)
+			--Spring.Echo(key, val, "uniform", uniform.name, uniform.value)
 		end
 	end
 
@@ -349,11 +402,10 @@ local function parsePbrMatParams(pbr)
 end
 
 -- Take only non-uniform parameters
-local function getPbrMaterialIndex(pbr)
+local function getPbrMaterialIndex(pbrModel, pbrMap)
+	local shaderDefinitions, deferredDefinitions = parsePbrMatParams(pbrModel, pbrMap)
+
 	local propString = ""
-
-	local shaderDefinitions, deferredDefinitions = parsePbrMatParams(pbr)
-
 	propString = propString .. "\nshaderDefinitions:\n"
 	propString = propString .. table.concat(shaderDefinitions, "\n")
 	propString = propString .. "\ndeferredDefinitions:\n"
@@ -366,19 +418,10 @@ local function getPbrMaterialIndex(pbr)
 	return hashValue
 end
 
-local MAPSIDE_MAPINFO = "mapinfo.lua"
-local mapInfo = VFS.FileExists(MAPSIDE_MAPINFO) and VFS.Include(MAPSIDE_MAPINFO) or false
-
-local irradianceMap, specularMap
-local function getScenePBRParams()
-	local pbrMap = (mapInfo.custom or {}).pbr
-	if pbrMap then
-
-	end
-end
-
-local function createNewMatDef(pbr)
-	local shaderDefinitions, deferredDefinitions, customStandardUniforms, customDefferedUniforms = parsePbrMatParams(pbr)
+local function createNewMatDef(pbrModel, pbrMap)
+	local shaderDefinitions, deferredDefinitions, customStandardUniforms, customDefferedUniforms = parsePbrMatParams(pbrModel, pbrMap)
+	--Spring.Utilities.TableEcho(shaderDefinitions, "shaderDefinitions")
+	Spring.Utilities.TableEcho(customStandardUniforms, "customStandardUniforms")
 
 	local newMat = {
 		shaderDefinitions = shaderDefinitions,
@@ -395,10 +438,10 @@ local function createNewMatDef(pbr)
 			[2] = "%TEX2",
 			[3] = "%TEX3",
 			--[4] = "%TEX4",
-			[5] = "%BRDF",
+			[5] = "unittextures/brdflutTex.png",
 			[6] = "$shadow",
-			[7] = "$reflection", --TODO replace with radiance map!!!
-			[8] = "$reflection",
+			[7] = "%IRRADIANCEMAP", --TODO replace with radiance map!!!
+			[8] = "%SPECULARMAP",
 		},
 		DrawUnit = DrawUnit,
 		--UnitCreated = UnitCreated,
@@ -416,14 +459,14 @@ for i = 1, #UnitDefs do
 	if VFS.FileExists(modelFilename) then
 		local model = VFS.Include(modelFilename)
 		if model and model.pbr then
-			local pbr = model.pbr
-			local pbrIndex = getPbrMaterialIndex(pbr)
+			local pbrModel, pbrMap = sanitizePbrInputs(model.pbr, pbrMap)
+			local pbrIndex = getPbrMaterialIndex(pbrModel, pbrMap)
 			local pbrMatName = "pbr" .. tostring(pbrIndex)
 			if not materials[pbrMatName] then
-				local pbrMatDef = createNewMatDef(pbr)
+				local pbrMatDef = createNewMatDef(pbrModel, pbrMap)
 				materials[pbrMatName] = pbrMatDef
 			end
-			local boundTexUnits = parseNewMatTexUnits(pbr)
+			local boundTexUnits = parseNewMatTexUnits(pbrModel, pbrMap)
 			local matDef = {pbrMatName}
 			for tkey, tval in pairs(boundTexUnits) do
 				matDef[tkey] = tval

@@ -57,22 +57,24 @@ model = {
 			gammaCorrection = false, -- Defaults to false. Don't change unless you know what you are doing!
 		},
 		iblMap = {
-			invToneMapExp = 1.3, --can be nil to disable poor man's SDR to HDR mapping
+			--invToneMapExp = 1.3, --can be nil to disable poor man's SDR to HDR mapping
 			scale = {1.0, 1.0}, --{diffuse, specular} IBL scale. Acts as a multiplier or a base value (if get is nil)
 			get = true, -- to generate GET_IBLMAP definition
 			lod = true, -- can be nil, a number, or true for auto
 			gammaCorrection = false, -- Artists see colors in sRGB, but we need colors in linear space. Therefore this defaults to true.
 		},
 		exposure = 1.0,
-		toneMapping = "uncharted2", --valid values are "aces", "uncharted2", "filmic".
+		toneMapping = "", --valid values are "aces", "uncharted2", "filmic", "reinhard".
 		gammaCorrection = true, -- do gamma correction (RGB-->sRGB) on the final color.
 		texUnits = { -- substitute values
 			["TEX0"] = "Jeffy_DiffuseTeamColor1024x1024.dds",
 			["TEX1"] = "Jeffy_NormalHeight_1k_uc_mips.dds",
 			["TEX2"] = "Jeffy_Emissive512x512.dds",
 			["TEX3"] = "Jeffy_ORM_EMGS_1k.dds",
-			["BRDF"] = "brdflutTex.png"
-		}
+			["SPECULARMAP"] = "whipple_creek_regional_park_01_1k.png",
+			--["SPECULARMAP"] = "studio_small_07_1k_.png",
+			--["IRRADIANCEMAP"] = "",
+		},
 	},
 }
 return model
