@@ -64,7 +64,7 @@ model = {
 			gammaCorrection = false, -- Artists see colors in sRGB, but we need colors in linear space. Therefore this defaults to true.
 		},
 		exposure = 1.0,
-		toneMapping = "romBinDaHouse", --valid values are "aces", "uncharted2", "filmic", "reinhard", "log", "romBinDaHouse".
+		toneMapping = "log", --valid values are "aces", "uncharted2", "filmic", "reinhard", "log", "romBinDaHouse".
 		gammaCorrection = true, -- do gamma correction (RGB-->sRGB) on the final color.
 		texUnits = { -- substitute values
 			["TEX0"] = "Jeffy_DiffuseTeamColor1024x1024.dds",

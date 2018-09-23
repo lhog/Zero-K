@@ -46,6 +46,17 @@ function myHash(str)
 	return hash
 end
 
+function adler32(str)
+	local MOD_ADLER = 65521
+	local a = 1
+	local b = 0
+	for i = 1, #str do
+		a = (a + string.byte(str, i, i)) % MOD_ADLER
+		b = (b + a) % MOD_ADLER
+	end
+	return math.bit_or(b * 65536, a);
+end
+
 local function getNumberOfChannels(val)
 	if not val then
 		return nil
@@ -411,7 +422,7 @@ local function getPbrMaterialIndex(pbrModel, pbrMap)
 	propString = propString .. "\ndeferredDefinitions:\n"
 	propString = propString .. table.concat(deferredDefinitions, "\n")
 
-	local hashValue = myHash(propString)
+	local hashValue = adler32(propString)
 
 	Spring.Echo(propString, hashValue)
 
