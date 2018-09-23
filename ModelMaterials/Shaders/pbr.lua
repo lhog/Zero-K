@@ -122,6 +122,8 @@ return {
 		#define TONEMAPPING_UNCHARTED2 2
 		#define TONEMAPPING_FILMIC 3
 		#define TONEMAPPING_REINHARD 4
+		#define TONEMAPPING_LOG 5
+		#define TONEMAPPING_ROMBINDAHOUSE 6
 
 		uniform vec3 sunPos;
 		uniform vec3 sunColor;
@@ -236,7 +238,7 @@ return {
 
 		//inspired by https://github.com/tobspr/GLSL-Color-Spaces/blob/master/ColorSpaces.inc.glsl
 		const vec3 SRGB_INVERSE_GAMMA = vec3(2.2);
-		const vec3 SRGB_GAMMA = vec3(1.0) / SRGB_INVERSE_GAMMA;
+		const vec3 SRGB_GAMMA = vec3(1.0 / 2.2);
 		const vec3 SRGB_ALPHA = vec3(0.055);
 		const vec3 SRGB_MAGIC_NUMBER = vec3(12.92);
 		const vec3 SRGB_MAGIC_NUMBER_INV = vec3(1.0) / SRGB_MAGIC_NUMBER;
@@ -319,11 +321,11 @@ return {
 
 		/////////////////////////////////////////
 		vec3 ACESFilmicTM(in vec3 x) {
-			float a = 2.51f;
-			float b = 0.03f;
-			float c = 2.43f;
-			float d = 0.59f;
-			float e = 0.14f;
+			float a = 2.51;
+			float b = 0.03;
+			float c = 2.43;
+			float d = 0.59;
+			float e = 0.14;
 			return (x*(a*x+b))/(x*(c*x+d)+e);
 		}
 
@@ -353,6 +355,24 @@ return {
 
 		vec3 ReinhardTM(in vec3 x) {
 			return x / (vec3(1.) + x);
+		}
+
+		vec3 LogTM(vec3 c){
+			const float limit = 2.2;
+			const float contrast = 0.35;
+
+			c = log(c + 1.0) / log(limit + 1.0);
+			c = clamp(c, 0.0, 1.0);
+
+			c = mix(c, c * c * (3.0 - 2.0 * c), contrast);
+			c = pow(c, vec3(1.05,0.9,1));
+
+			return c;
+		}
+
+		vec3 RomBinDaHouseTM(vec3 c) {
+			c = exp( -1.0 / ( 2.72 * c + 0.15 ) );
+			return c;
 		}
 
 		const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
@@ -868,6 +888,10 @@ return {
 				vec3 tmColor = FilmicTM(preExpColor);
 			#elif (TONEMAPPING == TONEMAPPING_REINHARD)
 				vec3 tmColor = ReinhardTM(preExpColor);
+			#elif (TONEMAPPING == TONEMAPPING_LOG)
+				vec3 tmColor = LogTM(preExpColor);
+			#elif (TONEMAPPING == TONEMAPPING_ROMBINDAHOUSE)
+				vec3 tmColor = RomBinDaHouseTM(preExpColor);
 			#else
 				vec3 tmColor = preExpColor;
 			#endif
