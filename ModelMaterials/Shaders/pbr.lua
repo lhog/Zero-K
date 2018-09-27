@@ -357,7 +357,7 @@ return {
 			return x / (vec3(1.) + x);
 		}
 
-		vec3 LogTM(vec3 c){
+		vec3 LogTM(vec3 c) {
 			const float limit = 2.2;
 			const float contrast = 0.35;
 
