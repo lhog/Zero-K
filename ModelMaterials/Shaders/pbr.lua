@@ -723,13 +723,7 @@ return {
 					samplingTexCoord = texCoord + texDiff;
 				#endif
 
-				#if 1
-					bvec4 badTexCoords = bvec4(samplingTexCoord.x > 1.0, samplingTexCoord.y > 1.0, samplingTexCoord.x < 0.0, samplingTexCoord.y < 0.0);
-					if (any(badTexCoords))
-						discard;
-				#else
-					samplingTexCoord = clamp(samplingTexCoord, vec2(0.0), vec2(1.0));
-				#endif
+				bvec4 badTexCoords = bvec4(samplingTexCoord.x > 1.0, samplingTexCoord.y > 1.0, samplingTexCoord.x < 0.0, samplingTexCoord.y < 0.0);
 			#else
 				vec2 samplingTexCoord = texCoord;
 			#endif
@@ -909,6 +903,11 @@ return {
 				gl_FragColor = toSRGB( vec4(preGammaColor, 1.0) );
 			#else
 				gl_FragColor = vec4(preGammaColor, 1.0);
+			#endif
+
+			//follow jK advise to avoid discard
+			#if defined(GET_PARALLAXMAP) && defined(HAS_TANGENTS)
+				gl_FragColor = mix(gl_FragColor, vec4(0.0), float(any(badTexCoords)));
 			#endif
 
 			#if   (DEBUG == DEBUG_BASECOLOR)
