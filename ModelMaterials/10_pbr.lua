@@ -84,6 +84,7 @@ local pbrMaterialValues = {
 	["parallaxMap.get"] = function(pbrModel, pbrMap) return pbrModel.parallaxMap.get or nil end,
 	["parallaxMap.gammaCorrection"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.parallaxMap.gammaCorrection, false) end,
 	["parallaxMap.fast"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.parallaxMap.fast, false) end,
+	["parallaxMap.invert"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.parallaxMap.invert, false) end,
 	["parallaxMap.perspective"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.parallaxMap.perspective, false) end,
 	["parallaxMap.limits"] = function(pbrModel, pbrMap) return pbrModel.parallaxMap.limits or nil end,
 
@@ -274,7 +275,11 @@ local function parsePbrMatParams(pbrModel, pbrMap)
 			if first == "parallaxMap" and second == "get" and val then
 				local texUnitNum = string.match(val, "%[(%d-)%]")
 				local texChannel = string.match(val, "%.(%a)")
-				table.insert(define, string.format("#define GET_PARALLAXMAP(coords) texture(tex%d, coords).%s" , texUnitNum, texChannel))
+				if pbrMaterialValues["parallaxMap.invert"](pbrModel, pbrMap) then
+					table.insert(define, string.format("#define GET_PARALLAXMAP(coords) (1.0 - texture(tex%d, coords).%s)" , texUnitNum, texChannel))
+				else
+					table.insert(define, string.format("#define GET_PARALLAXMAP(coords) (texture(tex%d, coords).%s)" , texUnitNum, texChannel))
+				end
 			elseif first == "parallaxMap" and second == "limits" and val and valType == "table" then
 				table.insert(define, "#define PARALLAXMAP_LIMITS PARALLAXMAP_LIMITS_MANUAL")
 			elseif first == "parallaxMap" and second == "limits" and val and valType == "boolean" then

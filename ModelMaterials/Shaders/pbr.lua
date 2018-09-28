@@ -577,8 +577,9 @@ return {
 
 		#ifdef use_shadows
 			float getShadowCoeff(in vec4 shadowCoords, PBRInfo pbrInputs) {
-				float bias = 0.000025 * tan(acos(pbrInputs.NdotL));
-				bias = clamp(bias, 0, 0.00005);
+				const float cb = 0.00005;
+				float bias = cb * tan(acos(pbrInputs.NdotL));
+				bias = clamp(bias, 0.5 * cb, 2.0 * cb);
 
 				float coeff = 0.0;
 
@@ -592,7 +593,8 @@ return {
 
 				for( int x = -1; x <= 1; x++ ) {
 					for( int y = -1; y <= 1; y++ ) {
-						vec2 offset = vec2( x, y ) * invShadowMapSize * 2.0;
+						vec2 offset = vec2( x, y ) * invShadowMapSize * 2.5;
+						//vec2 offset = vec2( x, y ) * invShadowMapSize;
 						coeff += w[1 + x][1 + y] * textureProj( shadowTex, shadowCoords + vec4(offset.x, offset.y, -bias, 0.0) );
 					}
 				}
@@ -721,7 +723,7 @@ return {
 					samplingTexCoord = texCoord + texDiff;
 				#endif
 
-				#if 0
+				#if 1
 					bvec4 badTexCoords = bvec4(samplingTexCoord.x > 1.0, samplingTexCoord.y > 1.0, samplingTexCoord.x < 0.0, samplingTexCoord.y < 0.0);
 					if (any(badTexCoords))
 						discard;
@@ -970,9 +972,9 @@ return {
 				//gl_FragColor = vec4( vec3( (1.0 - LdotV) * (1.0 - NdotL) ), 1.0 );
 				//gl_FragColor = vec4( vec3( sqrt(1.0 - pbrInputs.LdotV * pbrInputs.LdotV) ), 1.0 );
 				//float v1 = sqrt(1.0 - pbrInputs.LdotV * pbrInputs.LdotV) * clamp(tan(acos(pbrInputs.NdotL)), 0.0, 1.0);
-				float v1 = sqrt(1.0 - dot(v, vec3(0.0, 1.0, 0.0))) * clamp(tan(acos(pbrInputs.NdotL)), 0.0, 1.0);
-				gl_FragColor = vec4( vec3( v1 ), 1.0);
-				//gl_FragColor = vec4( vec3( tan(acos(pbrInputs.NdotL)) ));
+				//float v1 = sqrt(1.0 - dot(v, vec3(0.0, 1.0, 0.0))) * clamp(tan(acos(pbrInputs.NdotL)), 0.0, 1.0);
+				//gl_FragColor = vec4( vec3( v1 ), 1.0);
+				gl_FragColor = vec4( vec3( tan(acos(pbrInputs.NdotL)) ), 1.0);
 			#elif (DEBUG == DEBUG_SHADOWCOEFF2)
 				//float offset_scale_N = sqrt(1 - NdotL * NdotL); // sin(acos(L·N))
 				//float offset_scale_L = offset_scale_N / NdotL;    // tan(acos(L·N))
