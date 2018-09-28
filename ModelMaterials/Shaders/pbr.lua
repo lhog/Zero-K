@@ -79,7 +79,8 @@ return {
 
 			#ifdef use_shadows
 				shadowTexCoord = shadowMatrix * worldPos4;
-				shadowTexCoord.st = shadowTexCoord.st * (inversesqrt( abs(shadowTexCoord.st) + shadowParams.z) + shadowParams.w) + shadowParams.xy;
+				shadowTexCoord.xy *= (inversesqrt(abs(shadowTexCoord.xy) + shadowParams.zz) + shadowParams.ww);
+				shadowTexCoord.xy += shadowParams.xy;
 			#endif
 
 			cameraDir = cameraPos - worldPos;
@@ -576,25 +577,27 @@ return {
 
 		#ifdef use_shadows
 			float getShadowCoeff(in vec4 shadowCoords, PBRInfo pbrInputs) {
-				float v1 = sqrt(1.0 - pbrInputs.LdotV * pbrInputs.LdotV);
-				float bias = 0.00005 + 0.0002 * v1;
+				float bias = 0.000025 * tan(acos(pbrInputs.NdotL));
+				bias = clamp(bias, 0, 0.00005);
 
 				float coeff = 0.0;
 
 				vec2 invShadowMapSize = 1.0 / textureSize( shadowTex, 0 );
+
 				const mat3 w = mat3(
 					0.0625, 0.125, 0.0625,
 					0.125 , 0.25 ,  0.125,
 					0.0625, 0.125, 0.0625
 				);
+
 				for( int x = -1; x <= 1; x++ ) {
 					for( int y = -1; y <= 1; y++ ) {
-						vec2 offset = vec2( x, y ) * invShadowMapSize;
-						coeff += w[1 + x][1 + y] * textureProj(shadowTex, shadowCoords + vec4(offset.x, offset.y, -bias, 0.0) );
+						vec2 offset = vec2( x, y ) * invShadowMapSize * 2.0;
+						coeff += w[1 + x][1 + y] * textureProj( shadowTex, shadowCoords + vec4(offset.x, offset.y, -bias, 0.0) );
 					}
 				}
 
-				//coeff += textureProj(shadowTex, shadowCoords + vec4(0.0, 0.0, -bias, 0.0) );
+				//coeff = textureProj(shadowTex, shadowCoords + vec4(0.0, 0.0, -bias, 0.0) );
 
 				coeff  = (1.0 - coeff);
 				coeff *= shadowDensity;
@@ -964,12 +967,20 @@ return {
 			#elif (DEBUG == DEBUG_SHADOWCOEFF1)
 				//float offset_scale_N = sqrt(1 - NdotL * NdotL); // sin(acos(L·N))
 				//gl_FragColor = vec4( vec3(offset_scale_N), 1.0 );
-				gl_FragColor = vec4( vec3( (1.0 - LdotV) * (1.0 - NdotL) ), 1.0 );
+				//gl_FragColor = vec4( vec3( (1.0 - LdotV) * (1.0 - NdotL) ), 1.0 );
+				//gl_FragColor = vec4( vec3( sqrt(1.0 - pbrInputs.LdotV * pbrInputs.LdotV) ), 1.0 );
+				//float v1 = sqrt(1.0 - pbrInputs.LdotV * pbrInputs.LdotV) * clamp(tan(acos(pbrInputs.NdotL)), 0.0, 1.0);
+				float v1 = sqrt(1.0 - dot(v, vec3(0.0, 1.0, 0.0))) * clamp(tan(acos(pbrInputs.NdotL)), 0.0, 1.0);
+				gl_FragColor = vec4( vec3( v1 ), 1.0);
+				//gl_FragColor = vec4( vec3( tan(acos(pbrInputs.NdotL)) ));
 			#elif (DEBUG == DEBUG_SHADOWCOEFF2)
-				float offset_scale_N = sqrt(1 - NdotL * NdotL); // sin(acos(L·N))
-				float offset_scale_L = offset_scale_N / NdotL;    // tan(acos(L·N))
-				offset_scale_L = min(2.0, offset_scale_L);
-				gl_FragColor = vec4( vec3(offset_scale_L/2.0), 1.0 );
+				//float offset_scale_N = sqrt(1 - NdotL * NdotL); // sin(acos(L·N))
+				//float offset_scale_L = offset_scale_N / NdotL;    // tan(acos(L·N))
+				//offset_scale_L = min(2.0, offset_scale_L);
+				//gl_FragColor = vec4( vec3(offset_scale_L/2.0), 1.0 );
+				float v1 = dot(cross(v, l), vec3(0.0, 1.0, 0.0));
+				v1 = abs( v1 );
+				gl_FragColor = vec4( vec3( v1 ), 1.0 );
 			#elif (DEBUG == DEBUG_SHADOW)
 				gl_FragColor = vec4( vec3(shadow), 1.0 );
 			#elif (DEBUG == DEBUG_PREEXPCOLOR)
