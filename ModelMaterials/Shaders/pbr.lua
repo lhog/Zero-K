@@ -710,7 +710,7 @@ return {
 				vec2 samplingTexCoord = parallaxMapping(texCoord, tangentViewDir);
 				vec2 texDiff = samplingTexCoord - texCoord;
 				#if (PARALLAXMAP_LIMITS == PARALLAXMAP_LIMITS_AUTO) //automated texture offset limits
-					float bumpVal = GET_PARALLAXMAP * parallaxMapScale;
+					float bumpVal = GET_PARALLAXMAP(samplingTexCoord) * parallaxMapScale;
 					texDiff = clamp(texDiff, -vec2(bumpVal), vec2(bumpVal));
 					samplingTexCoord = texCoord + texDiff;
 				#elif (PARALLAXMAP_LIMITS == PARALLAXMAP_LIMITS_MANUAL) //user-defined texture offset limits
@@ -718,7 +718,7 @@ return {
 					samplingTexCoord = texCoord + texDiff;
 				#endif
 
-				#if 1
+				#if 0
 					bvec4 badTexCoords = bvec4(samplingTexCoord.x > 1.0, samplingTexCoord.y > 1.0, samplingTexCoord.x < 0.0, samplingTexCoord.y < 0.0);
 					if (any(badTexCoords))
 						discard;
