@@ -608,7 +608,7 @@ return {
 				// Simple parallax mapping
 				vec2 parallaxMapping(vec2 texC, vec3 tangentViewDir)
 				{
-					float height = GET_PARALLAXMAP;
+					float height = GET_PARALLAXMAP(texC);
 					#ifdef PARALLAXMAP_PERSPECTIVE //Normal Parallax Mapping
 						vec2 P = tangentViewDir.xy / tangentViewDir.z * height * parallaxMapScale;
 					#else //Parallax Mapping with Offset Limiting
@@ -642,14 +642,14 @@ return {
 
 					// get initial values
 					vec2  currentTexCoords     = texC;
-					float currentDepthMapValue = GET_PARALLAXMAP;
+					float currentDepthMapValue = GET_PARALLAXMAP(currentTexCoords);
 
 					while(currentLayerDepth < currentDepthMapValue)
 					{
 						// shift texture coordinates along direction of P
 						currentTexCoords -= deltaTexCoords;
 						// get depthmap value at current texture coordinates
-						currentDepthMapValue = GET_PARALLAXMAP;
+						currentDepthMapValue = GET_PARALLAXMAP(currentTexCoords);
 						// get depth of next layer
 						currentLayerDepth += layerDepth;
 					}
@@ -659,7 +659,7 @@ return {
 
 					// get depth after and before collision for linear interpolation
 					float afterDepth  = currentDepthMapValue - currentLayerDepth;
-					float beforeDepth = GET_PARALLAXMAP - currentLayerDepth + layerDepth;
+					float beforeDepth = GET_PARALLAXMAP(prevTexCoords) - currentLayerDepth + layerDepth;
 
 					// interpolation of texture coordinates
 					float weight = afterDepth / (afterDepth - beforeDepth);
@@ -717,12 +717,14 @@ return {
 					texDiff = clamp(texDiff, -parallaxMapLimits, parallaxMapLimits);
 					samplingTexCoord = texCoord + texDiff;
 				#endif
-/*
-				bvec4 badTexCoords = bvec4(samplingTexCoord.x > 1.0, samplingTexCoord.y > 1.0, samplingTexCoord.x < 0.0, samplingTexCoord.y < 0.0);
-				if (any(badTexCoords))
-					discard;
-*/
-				samplingTexCoord = clamp(samplingTexCoord, vec2(0.0), vec2(1.0));
+
+				#if 1
+					bvec4 badTexCoords = bvec4(samplingTexCoord.x > 1.0, samplingTexCoord.y > 1.0, samplingTexCoord.x < 0.0, samplingTexCoord.y < 0.0);
+					if (any(badTexCoords))
+						discard;
+				#else
+					samplingTexCoord = clamp(samplingTexCoord, vec2(0.0), vec2(1.0));
+				#endif
 			#else
 				vec2 samplingTexCoord = texCoord;
 			#endif

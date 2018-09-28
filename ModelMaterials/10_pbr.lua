@@ -29,23 +29,6 @@ local function DrawUnit(unitID, material, drawMode)
 	end
 end
 
-function myHash(str)
-	local hash = 0
-
-	local rem = #str % 3
-	if rem > 0 then
-		str = str .. string.rep(" ", rem)
-	end
-
-	for i = 1, #str / 3 do
-		local idx = (i - 1) * 3 + 1
-		local b1, b2, b3 = string.byte(str, idx, idx + 2)
-		hash = math.bit_xor(hash, b1, b2 * 256, b3 * 65536)
-	end
-
-	return hash
-end
-
 function adler32(str)
 	local MOD_ADLER = 65521
 	local a = 1
@@ -257,7 +240,7 @@ local function parseNewMatTexUnits(pbrModel, pbrMap)
 		boundTexUnits["IRRADIANCEMAP"] = "$reflection"
 	end
 
-	Spring.Utilities.TableEcho(boundTexUnits, "boundTexUnits")
+	--Spring.Utilities.TableEcho(boundTexUnits, "boundTexUnits")
 
 	return boundTexUnits
 end
@@ -291,7 +274,7 @@ local function parsePbrMatParams(pbrModel, pbrMap)
 			if first == "parallaxMap" and second == "get" and val then
 				local texUnitNum = string.match(val, "%[(%d-)%]")
 				local texChannel = string.match(val, "%.(%a)")
-				table.insert(define, "#define GET_" .. string.upper(first) .. string.format(" texture(tex%d, texCoord).%s", texUnitNum, texChannel))
+				table.insert(define, string.format("#define GET_PARALLAXMAP(coords) texture(tex%d, coords).%s" , texUnitNum, texChannel))
 			elseif first == "parallaxMap" and second == "limits" and val and valType == "table" then
 				table.insert(define, "#define PARALLAXMAP_LIMITS PARALLAXMAP_LIMITS_MANUAL")
 			elseif first == "parallaxMap" and second == "limits" and val and valType == "boolean" then
@@ -424,7 +407,7 @@ local function getPbrMaterialIndex(pbrModel, pbrMap)
 
 	local hashValue = adler32(propString)
 
-	Spring.Echo(propString, hashValue)
+	--Spring.Echo(propString, hashValue)
 
 	return hashValue
 end
@@ -432,7 +415,7 @@ end
 local function createNewMatDef(pbrModel, pbrMap)
 	local shaderDefinitions, deferredDefinitions, customStandardUniforms, customDefferedUniforms = parsePbrMatParams(pbrModel, pbrMap)
 	--Spring.Utilities.TableEcho(shaderDefinitions, "shaderDefinitions")
-	Spring.Utilities.TableEcho(customStandardUniforms, "customStandardUniforms")
+	--Spring.Utilities.TableEcho(customStandardUniforms, "customStandardUniforms")
 
 	local newMat = {
 		shaderDefinitions = shaderDefinitions,
