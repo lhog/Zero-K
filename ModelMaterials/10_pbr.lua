@@ -84,7 +84,7 @@ local pbrMaterialValues = {
 	["parallaxMap.get"] = function(pbrModel, pbrMap) return pbrModel.parallaxMap.get or nil end,
 	["parallaxMap.gammaCorrection"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.parallaxMap.gammaCorrection, false) end,
 	["parallaxMap.fast"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.parallaxMap.fast, false) end,
-	["parallaxMap.invert"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.parallaxMap.invert, false) end,
+	["parallaxMap.invert"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.parallaxMap.invert, true) end,
 	["parallaxMap.perspective"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.parallaxMap.perspective, false) end,
 	["parallaxMap.limits"] = function(pbrModel, pbrMap) return pbrModel.parallaxMap.limits or nil end,
 

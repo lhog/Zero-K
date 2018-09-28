@@ -26,7 +26,7 @@ model = {
 			gammaCorrection = false, -- Defaults to false. Don't change unless you know what you are doing!
 		},
 		parallaxMap = { -- parallax occlusion mapping. Will be ignored if normalMap.hasTangents == false
-			invert = true, -- invert height value, i.e. height = (1.0 - height). Algorithm expects depth map: 0.0 to be baseline, and 1.0 to be deep (not high!!!). Default is false.
+			invert = true, -- invert height value, i.e. height = (1.0 - height). Algorithm expects depth map: 0.0 to be baseline, and 1.0 to be deep (not high!!!). Default is true as many will put heightmap here anyway.
 			fast = false, --always test if fast is good enough and only switch to "precise" if quality is bad. fast=true is simple parallax, fast=false is parallax occlusion mapping
 			perspective = true, --whether to divide tangentViewDir.xy by tangentViewDir.z or not. A matter of personal preference. Check both.
 			limits = true, -- Can be boolean or vec2() table. This limits how large texture coordinates offsets parallax mapping can do. Offsets bigget than limits will be clamped.
