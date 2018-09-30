@@ -382,6 +382,8 @@ local function parsePbrMatParams(pbrModel, pbrMap)
 	end
 
 	local debugIdx = 1
+	local pbrModelDebug = pbrModel.debug or {}
+	local pbrMapDebug = pbrMap.debug or {}
 	for k, v in pairs(pbrDebug) do
 
 		local def = string.format("#define DEBUG_%s %d", string.upper(k), debugIdx)
@@ -389,7 +391,7 @@ local function parsePbrMatParams(pbrModel, pbrMap)
 		table.insert(deferredDefinitions, def)
 		debugIdx = debugIdx + 1
 
-		if v then
+		if v or getBooleanValue(pbrMapDebug[k], getBooleanValue(pbrModelDebug[k], false)) then
 			local def = string.format("#define DEBUG DEBUG_%s", string.upper(k))
 			table.insert(shaderDefinitions, def)
 			table.insert(deferredDefinitions, def)
