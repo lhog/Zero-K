@@ -10,6 +10,7 @@ local pbrMap = (mapInfo.custom or {}).pbr
 
 local function DrawUnit(unitID, material, drawMode)
 	if drawMode == normalDraw and material.customStandardUniforms then
+		gl.BlendFuncSeparate(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA, GL.ZERO, GL.ZERO)
 		local curShader = material.standardShader
 		for _, uniformData in pairs(material.customStandardUniforms) do
 			if not uniformData.location then
