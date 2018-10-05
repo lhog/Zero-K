@@ -6,7 +6,7 @@ local gameDeferredDraw = 5
 
 local MAPSIDE_MAPINFO = "mapinfo.lua"
 local mapInfo = VFS.FileExists(MAPSIDE_MAPINFO) and VFS.Include(MAPSIDE_MAPINFO) or {}
-local pbrMap = (mapInfo.custom or {}).pbr
+local pbrMapRaw = (mapInfo.custom or {}).pbr
 
 local function DrawUnit(unitID, material, drawMode)
 	if drawMode == normalDraw and material.customStandardUniforms then
@@ -30,7 +30,7 @@ local function DrawUnit(unitID, material, drawMode)
 	end
 end
 
-function adler32(str)
+local function adler32(str)
 	local MOD_ADLER = 65521
 	local a = 1
 	local b = 0
@@ -59,8 +59,8 @@ local function getBooleanValue(obj, default)
 	return (obj == nil and default) or obj
 end
 
-function tableConcat(dest, source)
-    for key, data in ipairs(source) do
+local function tableConcat(dest, source)
+    for _, data in ipairs(source) do
         table.insert(dest, data)
     end
     return dest
@@ -385,15 +385,15 @@ local function parsePbrMatParams(pbrModel, pbrMap)
 	local debugIdx = 1
 	local pbrModelDebug = pbrModel.debug or {}
 	local pbrMapDebug = pbrMap.debug or {}
+	local def
 	for k, v in pairs(pbrDebug) do
-
-		local def = string.format("#define DEBUG_%s %d", string.upper(k), debugIdx)
+		def = string.format("#define DEBUG_%s %d", string.upper(k), debugIdx)
 		table.insert(shaderDefinitions, def)
 		table.insert(deferredDefinitions, def)
 		debugIdx = debugIdx + 1
 
 		if v or getBooleanValue(pbrMapDebug[k], getBooleanValue(pbrModelDebug[k], false)) then
-			local def = string.format("#define DEBUG DEBUG_%s", string.upper(k))
+			def = string.format("#define DEBUG DEBUG_%s", string.upper(k))
 			table.insert(shaderDefinitions, def)
 			table.insert(deferredDefinitions, def)
 		end
@@ -461,7 +461,7 @@ for i = 1, #UnitDefs do
 	if VFS.FileExists(modelFilename) then
 		local model = VFS.Include(modelFilename)
 		if model and model.pbr then
-			local pbrModel, pbrMap = sanitizePbrInputs(model.pbr, pbrMap)
+			local pbrModel, pbrMap = sanitizePbrInputs(model.pbr, pbrMapRaw)
 			local pbrIndex = getPbrMaterialIndex(pbrModel, pbrMap)
 			local pbrMatName = "pbr" .. tostring(pbrIndex)
 			if not materials[pbrMatName] then
