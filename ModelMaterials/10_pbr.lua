@@ -80,6 +80,7 @@ local pbrMaterialValues = {
 	["normalMap.get"] = function(pbrModel, pbrMap) return pbrModel.normalMap.get or nil end,
 	["normalMap.gammaCorrection"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.normalMap.gammaCorrection, false) end,
 	["normalMap.hasTangents"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.normalMap.hasTangents, true) end,
+	["normalMap.flipBitangent"] = function(pbrModel, pbrMap) return getBooleanValue(pbrModel.normalMap.flipBitangent, false) end,
 
 	["parallaxMap.scale"] = function(pbrModel, pbrMap) return pbrModel.parallaxMap.scale or 0.01 end,
 	["parallaxMap.get"] = function(pbrModel, pbrMap) return pbrModel.parallaxMap.get or nil end,
@@ -304,6 +305,8 @@ local function parsePbrMatParams(pbrModel, pbrMap)
 				elseif second == "gammaCorrection" and val then
 					table.insert(define, "#define SRGB_" .. string.upper(first))
 				elseif second == "hasTangents" and val then
+					table.insert(define, "#define " .. camelToUnderline(second))
+				elseif second == "flipBitangent" and val then
 					table.insert(define, "#define " .. camelToUnderline(second))
 				elseif second == "invToneMapExp" and valType == "number" then
 					table.insert(define, "#define IBL_INVTONEMAP")

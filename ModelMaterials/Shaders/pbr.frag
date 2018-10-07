@@ -303,6 +303,10 @@ vec3 getWorldFragNormal() {
 			//vec3 worldBitangent = normalize( cross(worldNormalN, worldTangent) );
 			vec3 worldBitangent = normalize( cross(worldTangent, worldNormalN) );
 
+			#ifdef FLIP_BITANGENT
+				worldBitangent = -worldBitangent;
+			#endif
+
 			float handednessSign = dot(cross(worldNormalN, worldTangent), worldBitangent);
 			worldTangent = worldTangent * handednessSign;
 
@@ -596,7 +600,7 @@ void main(void) {
 	%%FRAGMENT_PRE_SHADING%%
 
 	// Here we have chicken and egg problem in case TBN is calculated in frag shader.
-	#if defined(GET_PARALLAXMAP) && defined(HAS_TANGENTS)
+	#if defined(GET_PARALLAXMAP) && defined(HAS_TANGENTS) && defined(GET_NORMALMAP)
 		mat3 invWorldTBN = transpose(worldTBN);
 		vec3 tangentViewDir = normalize(invWorldTBN * cameraDir);
 
@@ -614,6 +618,8 @@ void main(void) {
 		bvec4 badTexCoords = bvec4(samplingTexCoord.x > 1.0, samplingTexCoord.y > 1.0, samplingTexCoord.x < 0.0, samplingTexCoord.y < 0.0);
 	#else
 		vec2 samplingTexCoord = texCoord;
+		vec2 texDiff = vec2(0.0);
+		bvec4 badTexCoords = bvec4(false);
 	#endif
 
 	fillTexelsArray(samplingTexCoord);

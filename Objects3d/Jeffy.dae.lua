@@ -21,6 +21,7 @@ model = {
 		},
 		normalMap = {
 			hasTangents = true, --you somehow must know if the import of the model puts tangents and bitangents to gl_MultiTexCoord[5,6]
+			flipBitangent = false, 	--Correct WORLD normals (debug.worldNormals = true) should look like this (up - lots of green, right - lots of red, bottom - lots of blue). If instead lots of red is left and lots of blue is top, set this to true.
 			scale = {1.0, 1.0, 1.0}, -- scale for normals sampled from normalMapTex. Defaults to vec3(1.0)
 			get = "[1].rgb", --If you use DDS and see some weird moar/acne like artifacts, use uncompressed DDS instead.
 			gammaCorrection = false, -- Defaults to false. Don't change unless you know what you are doing!

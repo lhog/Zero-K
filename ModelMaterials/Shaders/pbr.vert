@@ -56,13 +56,15 @@ void main(void)	{
 					worldTangent = normalize(worldTangent - worldNormalN * dot(worldNormalN, worldTangent));
 				#endif
 
-				//vec3 worldBitangent = normalize( cross(worldNormalN, worldTangent) );
 				vec3 worldBitangent = normalize( cross(worldTangent, worldNormalN) );
+			#endif
+
+			#ifdef FLIP_BITANGENT
+				worldBitangent = -worldBitangent;
 			#endif
 
 			float handednessSign = dot(cross(worldNormalN, worldTangent), worldBitangent);
 			worldTangent = worldTangent * handednessSign;
-
 			worldTBN = mat3(worldTangent, worldBitangent, worldNormalN);
 		#else
 			worldNormal = gl_NormalMatrix * modelNormal;
