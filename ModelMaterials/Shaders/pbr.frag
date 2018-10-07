@@ -98,8 +98,7 @@ struct PBRInfo {
 	vec3 reflectance0;				// full reflectance color (normal incidence angle)
 	vec3 reflectance90;				// reflectance color at grazing angle
 	float roughness;				// authored roughness. Used in getIBLContribution()
-	float roughness2;				// roughness^2 used in geometricOcclusion()
-	float roughness4;				// roughness^4 used in microfacetDistribution()
+	float roughness4;				// roughness^4 used in geometricOcclusion() and microfacetDistribution()
 	vec3 diffuseColor;				// color contribution from diffuse lighting
 	vec3 specularColor;				// color contribution from specular lighting
 };
@@ -130,6 +129,10 @@ in Data {
 		vec3 worldNormal;
 	#endif
 };
+
+#ifndef HAS_TANGENTS
+	mat3 worldTBN;
+#endif
 
 //inspired by https://github.com/tobspr/GLSL-Color-Spaces/blob/master/ColorSpaces.inc.glsl
 const vec3 SRGB_INVERSE_GAMMA = vec3(2.2);
@@ -278,44 +281,43 @@ vec3 expExpand(in vec3 x, in float cutoff, in float mul) {
 }
 /////////////////////////////////////////
 
-vec3 getWorldFragNormal() {
-	#ifdef GET_NORMALMAP
-		#ifndef HAS_TANGENTS
-			vec3 posDx = dFdx(worldPos);
-			vec3 posDy = dFdy(worldPos);
+#ifndef HAS_TANGENTS
+	void calcTBN() {
+		vec3 posDx = dFdx(worldPos);
+		vec3 posDy = dFdy(worldPos);
 
-			vec2 texDx = dFdx(texCoord);
-			vec2 texDy = dFdy(texCoord);
+		vec2 texDx = dFdx(texCoord);
+		vec2 texDy = dFdy(texCoord);
 
-			vec3 worldTangent = (texDy.t * posDx - texDx.t * posDy) / (texDx.s * texDy.t - texDy.s * texDx.t);
+		vec3 worldTangent = (texDy.t * posDx - texDx.t * posDy) / (texDx.s * texDy.t - texDy.s * texDx.t);
 
-			// TODO: figure out which one is right/better
-			#if 1
-				vec3 worldNormalN = normalize(worldNormal);
-			#else
-				vec3 worldNormalN = normalize(cross(posDx, posDy));
-			#endif
-
-			#ifdef TBN_REORTHO
-				worldTangent = normalize(worldTangent - worldNormalN * dot(worldNormalN, worldTangent));
-			#endif
-
-			//vec3 worldBitangent = normalize( cross(worldNormalN, worldTangent) );
-			vec3 worldBitangent = normalize( cross(worldTangent, worldNormalN) );
-
-			#ifdef FLIP_BITANGENT
-				worldBitangent = -worldBitangent;
-			#endif
-
-			float handednessSign = dot(cross(worldNormalN, worldTangent), worldBitangent);
-			worldTangent = worldTangent * handednessSign;
-
-			mat3 worldTBN = mat3(worldTangent, worldBitangent, worldNormalN);
-		#else // HAS_TANGENTS
-			// Do nothing, got worldTBN from vertex shader
-			// TODO: Orthogonalize TBN as well?
+		// TODO: figure out which one is right/better
+		#if 1
+			vec3 worldNormalN = normalize(worldNormal);
+		#else
+			vec3 worldNormalN = normalize(cross(posDx, posDy));
 		#endif
 
+		#ifdef TBN_REORTHO
+			worldTangent = normalize(worldTangent - worldNormalN * dot(worldNormalN, worldTangent));
+		#endif
+
+		//vec3 worldBitangent = normalize( cross(worldNormalN, worldTangent) );
+		vec3 worldBitangent = normalize( cross(worldTangent, worldNormalN) );
+
+		#ifdef FLIP_BITANGENT
+			worldBitangent = -worldBitangent;
+		#endif
+
+		float handednessSign = sign(dot(cross(worldNormalN, worldTangent), worldBitangent));
+		worldTangent = worldTangent * handednessSign;
+
+		worldTBN = mat3(worldTangent, worldBitangent, worldNormalN);
+	}
+#endif
+
+vec3 getWorldFragNormal() {
+	#ifdef GET_NORMALMAP
 		vec3 normalMapVal = GET_NORMALMAP;
 		#ifdef SRGB_NORMALMAP
 			normalMapVal = fromSRGB(normalMapVal);
@@ -455,10 +457,10 @@ vec3 specularReflection(PBRInfo pbrInputs) {
 float geometricOcclusion(PBRInfo pbrInputs) {
 	float NdotL = pbrInputs.NdotL;
 	float NdotV = pbrInputs.NdotV;
-	float r = pbrInputs.roughness2;
+	float r4 = pbrInputs.roughness4;
 
-	float attenuationL = 2.0 * NdotL / (NdotL + sqrt(r * r + (1.0 - r * r) * (NdotL * NdotL)));
-	float attenuationV = 2.0 * NdotV / (NdotV + sqrt(r * r + (1.0 - r * r) * (NdotV * NdotV)));
+	float attenuationL = 2.0 * NdotL / (NdotL + sqrt(r4 + (1.0 - r4) * (NdotL * NdotL)));
+	float attenuationV = 2.0 * NdotV / (NdotV + sqrt(r4 + (1.0 - r4) * (NdotV * NdotV)));
 	return attenuationL * attenuationV;
 }
 
@@ -499,7 +501,7 @@ float microfacetDistribution(PBRInfo pbrInputs) {
 	}
 #endif
 
-#if defined(GET_PARALLAXMAP) && defined(HAS_TANGENTS)
+#if defined(GET_PARALLAXMAP)
 	#ifdef PARALLAXMAP_FAST
 		// https://learnopengl.com/code_viewer_gh.php?code=src/5.advanced_lighting/5.1.parallax_mapping/5.1.parallax_mapping.fs
 		// Simple parallax mapping
@@ -599,8 +601,15 @@ void fillTexelsArray(vec2 texC) {
 void main(void) {
 	%%FRAGMENT_PRE_SHADING%%
 
+	#ifndef HAS_TANGENTS
+		calcTBN();
+	#else // HAS_TANGENTS
+		// Do nothing, got worldTBN from vertex shader
+		// TODO: Orthogonalize TBN as well?
+	#endif
+
 	// Here we have chicken and egg problem in case TBN is calculated in frag shader.
-	#if defined(GET_PARALLAXMAP) && defined(HAS_TANGENTS) && defined(GET_NORMALMAP)
+	#if defined(GET_PARALLAXMAP) && defined(GET_NORMALMAP)
 		mat3 invWorldTBN = transpose(worldTBN);
 		vec3 tangentViewDir = normalize(invWorldTBN * cameraDir);
 
@@ -695,8 +704,9 @@ void main(void) {
 	roughness = max(roughness, MINROUGHNESS);
 	metallic = max(metallic, 0.0);
 
-	float roughness2 = roughness * roughness;
-	float roughness4 = roughness2 * roughness2;
+	//float roughness2 = roughness * roughness;
+	float roughness4 = roughness * roughness;
+	roughness4 *= roughness4; // roughness^4
 
 	vec3 f0 = vec3(MINROUGHNESS);
 	vec3 diffuseColor = baseColor.rgb * (vec3(1.0) - f0);
@@ -735,7 +745,6 @@ void main(void) {
 		specularEnvironmentR0,
 		specularEnvironmentR90,
 		roughness,
-		roughness2,
 		roughness4,
 		diffuseColor,
 		specularColor
@@ -800,7 +809,7 @@ void main(void) {
 	#endif
 
 	//follow jK advise to avoid discard
-	#if defined(GET_PARALLAXMAP) && defined(HAS_TANGENTS)
+	#if defined(GET_PARALLAXMAP)
 		gl_FragColor = mix(gl_FragColor, vec4(0.0), float(any(badTexCoords)));
 	#endif
 

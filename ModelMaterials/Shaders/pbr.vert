@@ -63,7 +63,7 @@ void main(void)	{
 				worldBitangent = -worldBitangent;
 			#endif
 
-			float handednessSign = dot(cross(worldNormalN, worldTangent), worldBitangent);
+			float handednessSign = sign(dot(cross(worldNormalN, worldTangent), worldBitangent));
 			worldTangent = worldTangent * handednessSign;
 			worldTBN = mat3(worldTangent, worldBitangent, worldNormalN);
 		#else
