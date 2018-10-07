@@ -21,7 +21,6 @@ model = {
 		},
 		normalMap = {
 			hasTangents = true, --you somehow must know if the import of the model puts tangents and bitangents to gl_MultiTexCoord[5,6]
-			flipBitangent = true, 	--Correct WORLD normals (debug.worldNormals = true) should look like this (up - lots of green, right - lots of red, bottom - lots of blue). If instead lots of red is left and lots of blue is top, set this to true.
 			scale = {1.0, 1.0, 1.0}, -- scale for normals sampled from normalMapTex. Defaults to vec3(1.0)
 			get = "[1].rgb", --If you use DDS and see some weird moar/acne like artifacts, use uncompressed DDS instead.
 			gammaCorrection = false, -- Defaults to false. Don't change unless you know what you are doing!
@@ -32,7 +31,7 @@ model = {
 			perspective = true, --whether to divide tangentViewDir.xy by tangentViewDir.z or not. A matter of personal preference. Check both.
 			limits = true, -- Can be boolean or vec2() table. This limits how large texture coordinates offsets parallax mapping can do. Offsets bigget than limits will be clamped.
 			scale = 0.01, --if you set this up and your model texturing (and everything else) looks off, try to divide scale by 10 and then find out the best value iteratively
-			--get = "[1].a", -- expects linear bump map as input
+			get = "[1].a", -- expects linear bump map as input
 			--get = nil,
 			gammaCorrection = false, -- Defaults to false. Don't change unless you know what you are doing!
 		},

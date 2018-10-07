@@ -49,19 +49,20 @@ void main(void)	{
 			vec3 worldTangent = normalize(vec3(modelMatrix * vec4(modelTangent, 0.0)));
 
 			#if 1 //take modelBitangent from attributes
-				vec3 modelBitangent = gl_MultiTexCoord6.xyz;
+				vec3 modelBitangent = -gl_MultiTexCoord6.xyz;
 				vec3 worldBitangent = normalize(vec3(modelMatrix * vec4(modelBitangent, 0.0)));
 			#else //calculate worldBitangent
 				#ifdef TBN_REORTHO
 					worldTangent = normalize(worldTangent - worldNormalN * dot(worldNormalN, worldTangent));
 				#endif
 
-				vec3 worldBitangent = normalize( cross(worldTangent, worldNormalN) );
+				//vec3 worldBitangent = normalize( cross(worldTangent, worldNormalN) );
+				vec3 worldBitangent = normalize( cross(worldNormalN, worldTangent) );
 			#endif
 
-			#ifdef FLIP_BITANGENT
-				worldBitangent = -worldBitangent;
-			#endif
+			//#ifdef FLIP_BITANGENT
+				//worldBitangent = -worldBitangent;
+			//#endif
 
 			float handednessSign = sign(dot(cross(worldNormalN, worldTangent), worldBitangent));
 			worldTangent = worldTangent * handednessSign;

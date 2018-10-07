@@ -302,12 +302,12 @@ vec3 expExpand(in vec3 x, in float cutoff, in float mul) {
 			worldTangent = normalize(worldTangent - worldNormalN * dot(worldNormalN, worldTangent));
 		#endif
 
-		//vec3 worldBitangent = normalize( cross(worldNormalN, worldTangent) );
-		vec3 worldBitangent = normalize( cross(worldTangent, worldNormalN) );
+		//vec3 worldBitangent = normalize( cross(worldTangent, worldNormalN) );
+		vec3 worldBitangent = normalize( cross(worldNormalN, worldTangent) );
 
-		#ifdef FLIP_BITANGENT
-			worldBitangent = -worldBitangent;
-		#endif
+		//#ifdef FLIP_BITANGENT
+			//worldBitangent = -worldBitangent;
+		//#endif
 
 		float handednessSign = sign(dot(cross(worldNormalN, worldTangent), worldBitangent));
 		worldTangent = worldTangent * handednessSign;
@@ -718,7 +718,7 @@ void main(void) {
 
 	// For typical incident reflectance range (between 4% to 100%) set the grazing reflectance to 100% for typical fresnel effect.
 	// For very low reflectance range on highly diffuse objects (below 4%), incrementally reduce grazing reflecance to 0%.
-	float reflectance90 = clamp(reflectance * 25.0, 0.0, 1.0);
+	float reflectance90 = clamp(reflectance * 25.0, 0.0, 1.0); // (* 25.0) = (/ 0.04)
 	vec3 specularEnvironmentR0 = specularColor.rgb;
 	vec3 specularEnvironmentR90 = vec3(1.0, 1.0, 1.0) * reflectance90;
 
