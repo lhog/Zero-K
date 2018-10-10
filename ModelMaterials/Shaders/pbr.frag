@@ -214,13 +214,22 @@ vec4 toSRGB(vec4 rgbIn) {
 }
 
 /////////////////////////////////////////
+const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 vec3 ACESFilmicTM(in vec3 x) {
 	float a = 2.51;
 	float b = 0.03;
 	float c = 2.43;
 	float d = 0.59;
 	float e = 0.14;
-	return (x*(a*x+b))/(x*(c*x+d)+e);
+	return (x * (a * x + b)) / (x * (c * x + d) + e);
+}
+
+// https://twitter.com/jimhejl/status/633777619998130176
+vec3 FilmicHejl2015(in vec3 x) {
+    vec4 vh = vec4(x, 1.0); //1.0 is hardcoded whitepoint!
+    vec4 va = 1.425 * vh + 0.05;
+    vec4 vf = (vh * va + 0.004) / (vh * (va + 0.55) + 0.0491) - 0.0821;
+    return vf.rgb / vf.www;
 }
 
 vec3 Uncharted2TM(in vec3 x) {
@@ -242,13 +251,38 @@ vec3 Uncharted2TM(in vec3 x) {
 }
 
 vec3 FilmicTM(in vec3 x) {
-	vec3 outColor = max(vec3(0.), x - vec3(0.004));
-	outColor = (outColor * (6.2 * outColor + .5)) / (outColor * (6.2 * outColor + 1.7) + 0.06);
+	vec3 outColor = max(vec3(0.0), x - vec3(0.004));
+	outColor = (outColor * (6.2 * outColor + 0.5)) / (outColor * (6.2 * outColor + 1.7) + 0.06);
 	return fromSRGB(outColor); //sadly FilmicTM outputs gamma corrected colors, so need to reverse that effect
 }
 
+//https://mynameismjp.wordpress.com/2010/04/30/a-closer-look-at-tone-mapping/ (comments by STEVEM)
+vec3 SteveMTM1(in vec3 x) {
+	const float a = 10.0; /// Mid
+	const float b = 0.3; /// Toe
+	const float c = 0.5; /// Shoulder
+	const float d = 1.5; /// Mid
+
+	return (x * (a * x + b)) / (x * (a * x + c) + d);
+}
+
+vec3 SteveMTM2(in vec3 x) {
+	const float a = 1.8; /// Mid
+	const float b = 1.4; /// Toe
+	const float c = 0.5; /// Shoulder
+	const float d = 1.5; /// Mid
+
+	return (x * (a * x + b)) / (x * (a * x + c) + d);
+}
+
+vec3 LumaReinhardTM(in vec3 x) {
+	float luma = dot(x, LUMA);
+	float toneMappedLuma = luma / (1.0 + luma);
+	return x * vec3(toneMappedLuma / luma);
+}
+
 vec3 ReinhardTM(in vec3 x) {
-	return x / (vec3(1.) + x);
+	return x / (vec3(1.0) + x);
 }
 
 vec3 LogTM(vec3 c) {
@@ -268,8 +302,6 @@ vec3 RomBinDaHouseTM(vec3 c) {
 	c = exp( -1.0 / ( 2.72 * c + 0.15 ) );
 	return c;
 }
-
-const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 
 vec3 expExpand(in vec3 x, in float cutoff, in float mul) {
 	float xL = dot(x, LUMA);
@@ -309,7 +341,7 @@ vec3 expExpand(in vec3 x, in float cutoff, in float mul) {
 			//worldBitangent = -worldBitangent;
 		//#endif
 
-		float handednessSign = sign(dot(cross(worldNormalN, worldTangent), worldBitangent));
+		float handednessSign = sign( dot(cross(worldNormalN, worldTangent), worldBitangent) );
 		worldTangent = worldTangent * handednessSign;
 
 		worldTBN = mat3(worldTangent, worldBitangent, worldNormalN);
@@ -796,6 +828,14 @@ void main(void) {
 		vec3 tmColor = LogTM(preExpColor);
 	#elif (TONEMAPPING == TONEMAPPING_ROMBINDAHOUSE)
 		vec3 tmColor = RomBinDaHouseTM(preExpColor);
+	#elif (TONEMAPPING == TONEMAPPING_STEVEM1)
+		vec3 tmColor = SteveMTM1(preExpColor);
+	#elif (TONEMAPPING == TONEMAPPING_STEVEM2)
+		vec3 tmColor = SteveMTM2(preExpColor);
+	#elif (TONEMAPPING == TONEMAPPING_LUMAREINHARD)
+		vec3 tmColor = LumaReinhardTM(preExpColor);
+	#elif (TONEMAPPING == TONEMAPPING_HEJL2015)
+		vec3 tmColor = FilmicHejl2015(preExpColor);
 	#else
 		vec3 tmColor = preExpColor;
 	#endif

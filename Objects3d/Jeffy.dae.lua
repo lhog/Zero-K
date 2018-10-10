@@ -68,7 +68,7 @@ model = {
 			--worldNormals = true,
 		},
 		exposure = 1.0,
-		toneMapping = "romBinDaHouse", --valid values are "aces", "uncharted2", "filmic", "reinhard", "log", "romBinDaHouse".
+		toneMapping = "romBinDaHouse", --valid values are "aces", "uncharted2", "filmic", "reinhard", "log", "romBinDaHouse", "lumaReinhard", "hejl2015", "steveM1", "steveM2".
 		gammaCorrection = true, -- do gamma correction (RGB-->sRGB) on the final color.
 		texUnits = { -- substitute values
 			["TEX0"] = "Jeffy_DiffuseTeamColor1024x1024.dds",
