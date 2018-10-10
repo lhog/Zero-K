@@ -503,7 +503,7 @@ float microfacetDistribution(PBRInfo pbrInputs) {
 
 #ifdef use_shadows
 	float getShadowCoeff(in vec4 shadowCoords, PBRInfo pbrInputs) {
-		const float cb = 0.00005;
+		const float cb = 0.0005;
 		float bias = cb * tan(acos(pbrInputs.NdotL));
 		bias = clamp(bias, 0.5 * cb, 2.0 * cb);
 
@@ -760,7 +760,8 @@ void main(void) {
 	vec3 h = normalize(l + v);						// Half vector between both l and v
 	vec3 reflection = -normalize(reflect(v, n));
 
-	float NdotL = clamp(dot(n, l), 0.001, 1.0);
+	float NdotLf = dot(n, l);
+	float NdotL = clamp(NdotLf, 0.001, 1.0);
 	float NdotV = clamp(abs(dot(n, v)), 0.001, 1.0);
 	float NdotH = clamp(dot(n, h), 0.0, 1.0);
 	float LdotV = clamp(dot(l, v), 0.0, 1.0);
@@ -807,10 +808,15 @@ void main(void) {
 
 	vec3 brdfPassColor = totalDiffColorAO + totalSpecColor;
 
+	float ss = smoothstep(-0.05, 0.1, NdotLf);
+	float shadowN = (ss + 1.0) * (1.0 - shadowDensity) + ss * 1.0; //put fragments, where normal points away from the light in shadow
 	#ifdef use_shadows
-		float shadow = getShadowCoeff(shadowTexCoord, pbrInputs);
-		brdfPassColor *= shadow;
+		float shadowG = getShadowCoeff(shadowTexCoord, pbrInputs);
+		float shadow = mix(shadowN, shadowG, ss);
+	#else
+		float shadow = shadowN;
 	#endif
+	brdfPassColor *= shadow;
 
 	brdfPassColor += emissive;
 
