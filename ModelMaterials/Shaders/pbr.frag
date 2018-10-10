@@ -503,7 +503,7 @@ float microfacetDistribution(PBRInfo pbrInputs) {
 
 #ifdef use_shadows
 	float getShadowCoeff(in vec4 shadowCoords, PBRInfo pbrInputs) {
-		const float cb = 0.0005;
+		const float cb = 0.0002;
 		float bias = cb * tan(acos(pbrInputs.NdotL));
 		bias = clamp(bias, 0.5 * cb, 2.0 * cb);
 
@@ -808,7 +808,7 @@ void main(void) {
 
 	vec3 brdfPassColor = totalDiffColorAO + totalSpecColor;
 
-	float ss = smoothstep(-0.05, 0.1, NdotLf);
+	float ss = smoothstep(0.0, 0.2, NdotLf);
 	float shadowN = (ss + 1.0) * (1.0 - shadowDensity) + ss * 1.0; //put fragments, where normal points away from the light in shadow
 	#ifdef use_shadows
 		float shadowG = getShadowCoeff(shadowTexCoord, pbrInputs);
