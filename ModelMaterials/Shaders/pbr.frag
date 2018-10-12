@@ -511,17 +511,17 @@ float microfacetDistribution(PBRInfo pbrInputs) {
 
 		vec2 invShadowMapSize = 1.0 / textureSize( shadowTex, 0 );
 
-		const mat3 w = mat3(
-			0.0625, 0.125, 0.0625,
-			0.125 , 0.25 ,  0.125,
-			0.0625, 0.125, 0.0625
-		);
+		#define SHADOWSAMPLES 5
+		const int ssHalf = int(floor(float(SHADOWSAMPLES)/2.0));
+		const float ssSum = float((ssHalf + 1) * (ssHalf + 1));
+		const float scale = 0.75;
 
-		for( int x = -1; x <= 1; x++ ) {
-			for( int y = -1; y <= 1; y++ ) {
-				vec2 offset = vec2( x, y ) * invShadowMapSize * 2.5;
-				//vec2 offset = vec2( x, y ) * invShadowMapSize;
-				coeff += w[1 + x][1 + y] * textureProj( shadowTex, shadowCoords + vec4(offset.x, offset.y, -bias, 0.0) );
+		for( int x = -ssHalf; x <= ssHalf; x++ ) {
+			float wx = float(ssHalf - abs(x) + 1) / ssSum;
+			for( int y = -ssHalf; y <= ssHalf; y++ ) {
+				float wy = float(ssHalf - abs(y) + 1) / ssSum;
+				vec2 offset = vec2( x, y ) * invShadowMapSize * scale;
+				coeff += wx * wy * textureProj( shadowTex, shadowCoords + vec4(offset.x, offset.y, -bias, 0.0) );
 			}
 		}
 
@@ -808,7 +808,7 @@ void main(void) {
 
 	vec3 brdfPassColor = totalDiffColorAO + totalSpecColor;
 
-	float ss = smoothstep(0.0, 0.2, NdotLf);
+	float ss = smoothstep(0.0, 0.5, NdotLf);
 	float shadowN = (ss + 1.0) * (1.0 - shadowDensity) + ss * 1.0; //put fragments, where normal points away from the light in shadow
 	#ifdef use_shadows
 		float shadowG = getShadowCoeff(shadowTexCoord, pbrInputs);
