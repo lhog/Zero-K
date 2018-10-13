@@ -436,6 +436,7 @@ void getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection, out vec3 dif
 
 		#ifdef IBL_TEX_LOD
 			float lod = (pbrInputs.roughness * iblMapLOD);
+			//lod = 0.1 * mod(float(simFrame), 160.0);
 			#ifdef HAS_SPECULARMAP
 				vec3 specularLight = sampleEquiRectLod(specularEnvTex, reflection, lod).rgb;
 			#else
@@ -472,7 +473,11 @@ void getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection, out vec3 dif
 	diffuseLight = max(vec3(0.0), diffuseLight);
 	specularLight = max(vec3(0.0), specularLight);
 
-	vec3 brdf = fromSRGB( texture(brdfLUT, vec2(pbrInputs.NdotV, 1.0 - pbrInputs.roughness)) ).rgb;
+	#if 0
+		vec2 brdf = textureLod(brdfLUT, vec2(pbrInputs.NdotV, 1.0 - pbrInputs.roughness), 0.0).xy;
+	#else //seems better
+		vec2 brdf = fromSRGB( textureLod(brdfLUT, vec2(pbrInputs.NdotV, 1.0 - pbrInputs.roughness), 0.0) ).xy;
+	#endif
 	diffuse *= diffuseLight * pbrInputs.diffuseColor;
 	specular *= specularLight * (pbrInputs.specularColor * brdf.x + brdf.y);
 }
@@ -503,9 +508,9 @@ float microfacetDistribution(PBRInfo pbrInputs) {
 
 #ifdef use_shadows
 	float getShadowCoeff(in vec4 shadowCoords, PBRInfo pbrInputs) {
-		const float cb = 0.0002;
+		const float cb = 0.00005;
 		float bias = cb * tan(acos(pbrInputs.NdotL));
-		bias = clamp(bias, 0.5 * cb, 2.0 * cb);
+		bias = clamp(bias, 0.01 * cb, 5.0 * cb);
 
 		float coeff = 0.0;
 
@@ -524,10 +529,11 @@ float microfacetDistribution(PBRInfo pbrInputs) {
 				coeff += wx * wy * textureProj( shadowTex, shadowCoords + vec4(offset.x, offset.y, -bias, 0.0) );
 			}
 		}
-
 		//coeff = textureProj(shadowTex, shadowCoords + vec4(0.0, 0.0, -bias, 0.0) );
 
 		coeff  = (1.0 - coeff);
+		coeff *= smoothstep(0.1, 1.0, coeff);
+
 		coeff *= shadowDensity;
 		return (1.0 - coeff);
 	}
@@ -809,7 +815,8 @@ void main(void) {
 	vec3 brdfPassColor = totalDiffColorAO + totalSpecColor;
 
 	float ss = smoothstep(0.0, 0.5, NdotLf);
-	float shadowN = (ss + 1.0) * (1.0 - shadowDensity) + ss * 1.0; //put fragments, where normal points away from the light in shadow
+	//ss = 0.0;
+	float shadowN = (1.0 - ss) * (1.0 - shadowDensity) + ss * 1.0; //put fragments, where normal points away from the light in shadow
 	#ifdef use_shadows
 		float shadowG = getShadowCoeff(shadowTexCoord, pbrInputs);
 		float shadow = mix(shadowN, shadowG, ss);
@@ -914,6 +921,12 @@ void main(void) {
 		gl_FragColor = vec4( iblDiffuse, 1.0 );
 	#elif (DEBUG == DEBUG_IBLSPECULARANDDIFFUSECOLOR)
 		gl_FragColor = vec4( iblSpecular + iblDiffuse, 1.0 );
+	#elif (DEBUG == DEBUG_TOTALSPECULARCOLOR)
+		gl_FragColor = vec4( totalSpecColor, 1.0 );
+	#elif (DEBUG == DEBUG_TOTALDIFFUSECOLOR)
+		gl_FragColor = vec4( totalDiffColor, 1.0 );
+	#elif (DEBUG == DEBUG_TOTALDIFFUSEAOCOLOR)
+		gl_FragColor = vec4( totalDiffColorAO, 1.0 );
 	#elif (DEBUG == DEBUG_SHADOWCOEFF1)
 		//float offset_scale_N = sqrt(1 - NdotL * NdotL); // sin(acos(L·N))
 		//gl_FragColor = vec4( vec3(offset_scale_N), 1.0 );
@@ -937,6 +950,12 @@ void main(void) {
 		gl_FragColor = vec4(preExpColor, 1.0);
 	#elif (DEBUG == DEBUG_TMCOLOR)
 		gl_FragColor = vec4(tmColor, 1.0);
+	#elif (DEBUG == DEBUG_NDOTL)
+		gl_FragColor = vec4( vec3(NdotL), 1.0);
+	#elif (DEBUG == DEBUG_NDOTV)
+		gl_FragColor = vec4( vec3(NdotV), 1.0);
+	#elif (DEBUG == DEBUG_BRDFLUT)
+		gl_FragColor = vec4( fromSRGB( textureLod(brdfLUT, vec2(pbrInputs.NdotV, 1.0-pbrInputs.roughness), 0.0) ).rgb, 1.0);
 	#endif
 
 

@@ -31,7 +31,7 @@ model = {
 			perspective = true, --whether to divide tangentViewDir.xy by tangentViewDir.z or not. A matter of personal preference. Check both.
 			limits = true, -- Can be boolean or vec2() table. This limits how large texture coordinates offsets parallax mapping can do. Offsets bigget than limits will be clamped.
 			scale = 0.01, --if you set this up and your model texturing (and everything else) looks off, try to divide scale by 10 and then find out the best value iteratively
-			get = "[1].a", -- expects linear bump map as input
+			--get = "[1].a", -- expects linear bump map as input
 			--get = nil,
 			gammaCorrection = false, -- Defaults to false. Don't change unless you know what you are doing!
 		},
@@ -65,17 +65,17 @@ model = {
 			gammaCorrection = false, -- Artists see colors in sRGB, but we need colors in linear space. Therefore this defaults to true.
 		},
 		debug = {
-			--worldNormals = true,
+			--shadow = true,
 		},
 		exposure = 1.0,
-		toneMapping = "romBinDaHouse", --valid values are "aces", "uncharted2", "filmic", "reinhard", "log", "romBinDaHouse", "lumaReinhard", "hejl2015", "steveM1", "steveM2".
+		toneMapping = "", --valid values are "aces", "uncharted2", "filmic", "reinhard", "log", "romBinDaHouse", "lumaReinhard", "hejl2015", "steveM1", "steveM2".
 		gammaCorrection = true, -- do gamma correction (RGB-->sRGB) on the final color.
 		texUnits = { -- substitute values
 			["TEX0"] = "Jeffy_DiffuseTeamColor1024x1024.dds",
 			["TEX1"] = "Jeffy_NormalHeight_1k_uc_mips.dds",
 			["TEX2"] = "Jeffy_Emissive512x512.dds",
 			["TEX3"] = "Jeffy_ORM_EMGS_1k.dds",
-			["SPECULARMAP"] = "whipple_creek_regional_park_01_1k.png",
+			--["SPECULARMAP"] = "whipple_creek_regional_park_01_1k.png",
 			--["SPECULARMAP"] = "studio_small_07_1k_.png",
 			--["IRRADIANCEMAP"] = "",
 		},
