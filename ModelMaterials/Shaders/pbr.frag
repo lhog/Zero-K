@@ -514,22 +514,25 @@ float microfacetDistribution(PBRInfo pbrInputs) {
 
 		float coeff = 0.0;
 
-		vec2 invShadowMapSize = 1.0 / textureSize( shadowTex, 0 );
+		#if 0
+			vec2 invShadowMapSize = 1.0 / textureSize( shadowTex, 0 );
 
-		#define SHADOWSAMPLES 5
-		const int ssHalf = int(floor(float(SHADOWSAMPLES)/2.0));
-		const float ssSum = float((ssHalf + 1) * (ssHalf + 1));
-		const float scale = 0.75;
+			#define SHADOWSAMPLES 5
+			const int ssHalf = int(floor(float(SHADOWSAMPLES)/2.0));
+			const float ssSum = float((ssHalf + 1) * (ssHalf + 1));
+			const float scale = 0.75;
 
-		for( int x = -ssHalf; x <= ssHalf; x++ ) {
-			float wx = float(ssHalf - abs(x) + 1) / ssSum;
-			for( int y = -ssHalf; y <= ssHalf; y++ ) {
-				float wy = float(ssHalf - abs(y) + 1) / ssSum;
-				vec2 offset = vec2( x, y ) * invShadowMapSize * scale;
-				coeff += wx * wy * textureProj( shadowTex, shadowCoords + vec4(offset.x, offset.y, -bias, 0.0) );
+			for( int x = -ssHalf; x <= ssHalf; x++ ) {
+				float wx = float(ssHalf - abs(x) + 1) / ssSum;
+				for( int y = -ssHalf; y <= ssHalf; y++ ) {
+					float wy = float(ssHalf - abs(y) + 1) / ssSum;
+					vec2 offset = vec2( x, y ) * invShadowMapSize * scale;
+					coeff += wx * wy * textureProj( shadowTex, shadowCoords + vec4(offset.x, offset.y, -bias, 0.0) );
+				}
 			}
-		}
-		//coeff = textureProj(shadowTex, shadowCoords + vec4(0.0, 0.0, -bias, 0.0) );
+		#else
+			coeff = textureProj(shadowTex, shadowCoords + vec4(0.0, 0.0, -bias, 0.0) );
+		#endif
 
 		coeff  = (1.0 - coeff);
 		coeff *= smoothstep(0.1, 1.0, coeff);
@@ -815,7 +818,7 @@ void main(void) {
 	vec3 brdfPassColor = totalDiffColorAO + totalSpecColor;
 
 	float ss = smoothstep(0.0, 0.5, NdotLf);
-	//ss = 0.0;
+	//ss = 1.0;
 	float shadowN = (1.0 - ss) * (1.0 - shadowDensity) + ss * 1.0; //put fragments, where normal points away from the light in shadow
 	#ifdef use_shadows
 		float shadowG = getShadowCoeff(shadowTexCoord, pbrInputs);
