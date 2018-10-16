@@ -98,6 +98,7 @@ struct PBRInfo {
 	vec3 reflectance0;				// full reflectance color (normal incidence angle)
 	vec3 reflectance90;				// reflectance color at grazing angle
 	float roughness;				// authored roughness. Used in getIBLContribution()
+	//float roughness2;				// roughness^2
 	float roughness4;				// roughness^4 used in geometricOcclusion() and microfacetDistribution()
 	vec3 diffuseColor;				// color contribution from diffuse lighting
 	vec3 specularColor;				// color contribution from specular lighting
@@ -491,15 +492,27 @@ vec3 specularReflection(PBRInfo pbrInputs) {
 	return pbrInputs.reflectance0 + (pbrInputs.reflectance90 - pbrInputs.reflectance0) * pow( clamp(1.0 - pbrInputs.VdotH, 0.0, 1.0), 5.0 );
 }
 
-float geometricOcclusion(PBRInfo pbrInputs) {
-	float NdotL = pbrInputs.NdotL;
-	float NdotV = pbrInputs.NdotV;
-	float r4 = pbrInputs.roughness4;
 
-	float attenuationL = 2.0 * NdotL / (NdotL + sqrt(r4 + (1.0 - r4) * (NdotL * NdotL)));
-	float attenuationV = 2.0 * NdotV / (NdotV + sqrt(r4 + (1.0 - r4) * (NdotV * NdotV)));
-	return attenuationL * attenuationV;
-}
+//There are several approximations to Smith's shadowing function floating around:
+#if 0 //wider
+	float geometricOcclusion(PBRInfo pbrInputs) {
+		float NdotL = pbrInputs.NdotL;
+		float NdotV = pbrInputs.NdotV;
+		float r4 = pbrInputs.roughness4;
+
+		float attenuationL = 2.0 * NdotL / (NdotL + sqrt(r4 + (1.0 - r4) * (NdotL * NdotL)));
+		float attenuationV = 2.0 * NdotV / (NdotV + sqrt(r4 + (1.0 - r4) * (NdotV * NdotV)));
+		return attenuationL * attenuationV;
+	}
+#else //thinner, equation 4 of https://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
+	float geometricOcclusion(PBRInfo pbrInputs) {
+		float r = (pbrInputs.roughness + 1.0);
+		float k = (r*r) / 8.0;
+		float GL = pbrInputs.NdotL / (pbrInputs.NdotL * (1.0 - k) + k);
+		float GV = pbrInputs.NdotV / (pbrInputs.NdotV * (1.0 - k) + k);
+		return GL * GV;
+	}
+#endif
 
 float microfacetDistribution(PBRInfo pbrInputs) {
 	float f = (pbrInputs.NdotH * pbrInputs.roughness4 - pbrInputs.NdotH) * pbrInputs.NdotH + 1.0;
@@ -514,24 +527,22 @@ float microfacetDistribution(PBRInfo pbrInputs) {
 
 		float coeff = 0.0;
 
-		#if 0
-			vec2 invShadowMapSize = 1.0 / textureSize( shadowTex, 0 );
-
+		#if 1
 			#define SHADOWSAMPLES 5
 			const int ssHalf = int(floor(float(SHADOWSAMPLES)/2.0));
 			const float ssSum = float((ssHalf + 1) * (ssHalf + 1));
-			const float scale = 0.75;
+
+			shadowCoords += vec4(0.0, 0.0, -bias, 0.0);
 
 			for( int x = -ssHalf; x <= ssHalf; x++ ) {
 				float wx = float(ssHalf - abs(x) + 1) / ssSum;
 				for( int y = -ssHalf; y <= ssHalf; y++ ) {
 					float wy = float(ssHalf - abs(y) + 1) / ssSum;
-					vec2 offset = vec2( x, y ) * invShadowMapSize * scale;
-					coeff += wx * wy * textureProj( shadowTex, shadowCoords + vec4(offset.x, offset.y, -bias, 0.0) );
+					coeff += wx * wy * textureProjOffset ( shadowTex, shadowCoords, ivec2(x, y));
 				}
 			}
 		#else
-			coeff = textureProj(shadowTex, shadowCoords + vec4(0.0, 0.0, -bias, 0.0) );
+			coeff = textureProj(shadowTex, shadowCoords + vec4(0.0, 0.0, bias, 0.0) );
 		#endif
 
 		coeff  = (1.0 - coeff);
@@ -745,9 +756,8 @@ void main(void) {
 	roughness = max(roughness, MINROUGHNESS);
 	metallic = max(metallic, 0.0);
 
-	//float roughness2 = roughness * roughness;
-	float roughness4 = roughness * roughness;
-	roughness4 *= roughness4; // roughness^4
+	float roughness2 = roughness * roughness;
+	float roughness4 = roughness2 * roughness2; // roughness^4
 
 	vec3 f0 = vec3(MINROUGHNESS);
 	vec3 diffuseColor = baseColor.rgb * (vec3(1.0) - f0);
@@ -787,6 +797,7 @@ void main(void) {
 		specularEnvironmentR0,
 		specularEnvironmentR90,
 		roughness,
+		//roughness2,
 		roughness4,
 		diffuseColor,
 		specularColor
@@ -918,6 +929,10 @@ void main(void) {
 		#else
 			gl_FragColor = vec4( textureLod(irradianceEnvTex, n, 0.0).rgb, 1.0 );
 		#endif
+	#elif (DEBUG == DEBUG_MODELDIFFUSECOLOR)
+			gl_FragColor = vec4( modelDiffColor, 1.0);
+	#elif (DEBUG == DEBUG_MODELSPECULARCOLOR)
+			gl_FragColor = vec4( modelSpecColor, 1.0);
 	#elif (DEBUG == DEBUG_IBLSPECULARCOLOR)
 		gl_FragColor = vec4( iblSpecular, 1.0 );
 	#elif (DEBUG == DEBUG_IBLDIFFUSECOLOR)
