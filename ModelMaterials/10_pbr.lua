@@ -41,6 +41,10 @@ local function adler32(str)
 	return math.bit_or(b * 65536, a);
 end
 
+local function hashFunc(str)
+	return VFS.CalculateHash(str, 0) or adler32(str)
+end
+
 local function getNumberOfChannels(val)
 	if not val then
 		return nil
@@ -422,7 +426,7 @@ local function getPbrMaterialIndex(pbrModel, pbrMap)
 	propString = propString .. "\ndeferredDefinitions:\n"
 	propString = propString .. table.concat(deferredDefinitions, "\n")
 
-	local hashValue = adler32(propString)
+	local hashValue = hashFunc(propString)
 
 	--Spring.Echo(propString, hashValue)
 
