@@ -106,7 +106,6 @@ struct PBRInfo {
 
 vec4 texels[4]; //change to something else if more/less base textures are required
 
-//const float M_PI = 3.141592653589793;
 const float M_PI = 3.1415926535897932384626433832795028841971693993751058209749445923078164062;
 const float M_PI2 = M_PI * 2.0;
 const float MINROUGHNESS = 0.04;
@@ -474,9 +473,13 @@ void getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection, out vec3 dif
 	diffuseLight = max(vec3(0.0), diffuseLight);
 	specularLight = max(vec3(0.0), specularLight);
 
-	#if 0
+	//float alphaG = (0.5 + pbrInputs.roughness / 2.0);
+	//alphaG *= alphaG;
+
+	#if 1
+		//vec2 brdf = textureLod(brdfLUT, vec2(pbrInputs.NdotV, 1.0 - alphaG), 0.0).xy;
 		vec2 brdf = textureLod(brdfLUT, vec2(pbrInputs.NdotV, 1.0 - pbrInputs.roughness), 0.0).xy;
-	#else //seems better
+	#else
 		vec2 brdf = fromSRGB( textureLod(brdfLUT, vec2(pbrInputs.NdotV, 1.0 - pbrInputs.roughness), 0.0) ).xy;
 	#endif
 	diffuse *= diffuseLight * pbrInputs.diffuseColor;
@@ -752,9 +755,8 @@ void main(void) {
 	#endif
 
 	// sanitize inputs
-	// TODO: expand ranges?
-	roughness = max(roughness, MINROUGHNESS);
-	metallic = max(metallic, 0.0);
+	roughness = clamp(roughness, MINROUGHNESS, 1.0);
+	metallic = clamp(metallic, 0.0, 1.0);
 
 	float roughness2 = roughness * roughness;
 	float roughness4 = roughness2 * roughness2; // roughness^4

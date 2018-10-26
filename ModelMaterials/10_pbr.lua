@@ -8,8 +8,33 @@ local MAPSIDE_MAPINFO = "mapinfo.lua"
 local mapInfo = VFS.FileExists(MAPSIDE_MAPINFO) and VFS.Include(MAPSIDE_MAPINFO) or {}
 local pbrMapRaw = (mapInfo.custom or {}).pbr
 
+-----------===================================-------------
+local genBrdfLutClass = VFS.Include("ModelMaterials/Shaders/genBrdfLut.lua")
+local genBrdfLut = genBrdfLutClass(512) --512 is BRDF LUT texture size
+
+genBrdfLut:Initialize()
+local brdflutTex = genBrdfLut:GetTexture()
+local brdflutTexInitialized = false
+
+genBrdfLut.scream = Script.CreateScream()
+genBrdfLut.scream.func = function()
+	genBrdfLut:Finalize()
+	brdflutTex = nil
+end
+-----------===================================-------------
+
 local function DrawUnit(unitID, material, drawMode)
 	if drawMode == normalDraw and material.customStandardUniforms then
+		if brdflutTex and (not brdflutTexInitialized) then
+			-- Terrible workaround to missing DrawGenesis callin.
+			gl.PushPopMatrix(function()
+				gl.MatrixMode(GL.PROJECTION); gl.LoadIdentity();
+				gl.MatrixMode(GL.MODELVIEW); gl.LoadIdentity();
+				Spring.Echo("~brdflutTexInitialized")
+				genBrdfLut:Execute(false)
+				brdflutTexInitialized = true
+			end)
+		end
 		gl.BlendFuncSeparate(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA, GL.ZERO, GL.ZERO)
 		local curShader = material.standardShader
 		for _, uniformData in pairs(material.customStandardUniforms) do
@@ -453,7 +478,8 @@ local function createNewMatDef(pbrModel, pbrMap)
 			[2] = "%TEX2",
 			[3] = "%TEX3",
 			--[4] = "%TEX4",
-			[5] = "unittextures/brdflutTex.png",
+			[5] = brdflutTex or "unittextures/brdflutTex.png",
+			--[5] = "unittextures/brdflutTex.png",
 			[6] = "$shadow",
 			[7] = "%IRRADIANCEMAP", --TODO replace with radiance map!!!
 			[8] = "%SPECULARMAP",
@@ -476,7 +502,7 @@ for i = 1, #UnitDefs do
 		if model and model.pbr then
 			local pbrModel, pbrMap = sanitizePbrInputs(model.pbr, pbrMapRaw)
 			local pbrIndex = getPbrMaterialIndex(pbrModel, pbrMap)
-			local pbrMatName = "pbr" .. tostring(pbrIndex)
+			local pbrMatName = "pbr_" .. tostring(pbrIndex)
 			if not materials[pbrMatName] then
 				local pbrMatDef = createNewMatDef(pbrModel, pbrMap)
 				materials[pbrMatName] = pbrMatDef
