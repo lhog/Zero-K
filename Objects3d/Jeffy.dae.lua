@@ -8,7 +8,7 @@ model = {
 	midpos = {0, 0, 0},
 	--rotAxisSigns = {-1, -1, -1}
 	pbr = {
-		flipUV = false, --flip second component of UV map. False is for DDS, True is for everything else. For now keep everything either in DDS or in PNG/TGA
+		flipUV = true, --flip second component of UV map. False is for DDS, True is for everything else. For now keep everything either in DDS or in PNG/TGA
 		fastGamma = true, --default is false i.e. more precise method
 		tbnReortho = true, -- Re-orthogonalize TBN matrix using Gram-Schmidt process. Might behave differently depending on "hasTangents". Default is true.
 		pbrWorkflow = "metallic", -- either "metallic" or "specular". "specular" is not yet implemented
@@ -65,14 +65,14 @@ model = {
 			gammaCorrection = false, -- Artists see colors in sRGB, but we need colors in linear space. Therefore this defaults to true.
 		},
 		debug = {
-			--shadow = true,
+			--tangentNormals = true,
 		},
 		exposure = 1.0,
 		toneMapping = "", --valid values are "aces", "uncharted2", "filmic", "reinhard", "log", "romBinDaHouse", "lumaReinhard", "hejl2015", "steveM1", "steveM2".
 		gammaCorrection = true, -- do gamma correction (RGB-->sRGB) on the final color.
 		texUnits = { -- substitute values
 			["TEX0"] = "Jeffy_DiffuseTeamColor1024x1024.dds",
-			["TEX1"] = "Jeffy_NormalHeight_1k_uc_mips.dds",
+			["TEX1"] = "Jeffy_NormalHeight_1k_3dc_mips.dds",
 			["TEX2"] = "Jeffy_Emissive512x512.dds",
 			["TEX3"] = "Jeffy_ORM_EMGS_1k.dds",
 			--["SPECULARMAP"] = "whipple_creek_regional_park_01_1k.png",

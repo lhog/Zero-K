@@ -64,14 +64,17 @@ float G_SchlicksmithGGX(float dotNL, float dotNV, float roughness)
 		float k = (roughness * roughness) / 2.0;
 	#elif (G_OPTION == 2)
 		float k = (roughness + 1.0);
-		k = k * k / 8.0;
+		//k = k * k;
 	#elif (G_OPTION == 3)
+		float k = (roughness + 1.0);
+		k = k * k / 8.0;
+	#elif (G_OPTION == 4)
 		float k = (0.5 + 0.5 * roughness);
 		k = k * k;
 	#endif
 	float GL = dotNL / (dotNL * (1.0 - k) + k);
 	float GV = dotNV / (dotNV * (1.0 - k) + k);
-	return GL * GV;	
+	return GL * GV;
 }
 
 vec2 BRDF(float NoV, float roughness)
@@ -113,4 +116,5 @@ void main() {
 	//NdotV, roughness
 	vec2 inUV = gl_FragCoord.xy / texSize;
 	gl_FragColor = vec4(BRDF(inUV.x, 1.0 - inUV.y), 0.0, 1.0);
+	//gl_FragColor = pow(gl_FragColor, vec4(2.2));
 }

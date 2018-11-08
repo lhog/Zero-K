@@ -64,7 +64,7 @@ end
 function genBrdfLut:Execute(isScreenSpace)
 	if gl.IsValidFBO(self.brdfFBO) then
 		gl.ActiveShader(self.brdfShader, function ()
-			gl.ActiveFBO(self.brdfFBO, function()		
+			gl.ActiveFBO(self.brdfFBO, function()
 				gl.DepthTest(false)
 				gl.Blending(false)
 				if isScreenSpace then
@@ -72,8 +72,8 @@ function genBrdfLut:Execute(isScreenSpace)
 				else
 					gl.TexRect(-1, -1, 1, 1)
 				end
-				gl.SaveImage( 0, 0, self.textureSize, self.textureSize, string.format("brdf_%s.png", select(1, Spring.GetGameFrame())) )
-			end)			
+				--gl.SaveImage( 0, 0, self.textureSize, self.textureSize, string.format("brdf_%s.png", select(1, Spring.GetGameFrame())) )
+			end)
 		end)
 	end
 end

@@ -10,7 +10,8 @@ local pbrMapRaw = (mapInfo.custom or {}).pbr
 
 -----------===================================-------------
 local genBrdfLutClass = VFS.Include("ModelMaterials/Shaders/genBrdfLut.lua")
-local genBrdfLut = genBrdfLutClass(512) --512 is BRDF LUT texture size
+local BRDFLUT_TEXDIM = 512 --512 is BRDF LUT texture size
+local genBrdfLut = genBrdfLutClass(BRDFLUT_TEXDIM)
 
 genBrdfLut:Initialize()
 local brdflutTex = genBrdfLut:GetTexture()
@@ -435,8 +436,11 @@ local function parsePbrMatParams(pbrModel, pbrMap)
 			table.insert(shaderDefinitions, def)
 			table.insert(deferredDefinitions, def)
 		end
-
 	end
+
+
+
+	Spring.Echo(shaderDefinitions)
 
 	return shaderDefinitions, deferredDefinitions, customStandardUniforms, customDefferedUniforms
 end

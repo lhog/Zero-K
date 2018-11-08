@@ -871,17 +871,6 @@ void main(void) {
 
 	vec3 preGammaColor = mix(tmColor, teamColor.rgb, baseColor.a);
 
-	#ifdef GAMMA_CORRECTION
-		gl_FragColor = toSRGB( vec4(preGammaColor, 1.0) );
-	#else
-		gl_FragColor = vec4(preGammaColor, 1.0);
-	#endif
-
-	//follow jK advise to avoid discard
-	#if defined(GET_PARALLAXMAP)
-		gl_FragColor = mix(gl_FragColor, vec4(0.0), float(any(badTexCoords)));
-	#endif
-
 	#if   (DEBUG == DEBUG_BASECOLOR)
 		gl_FragColor = vec4(baseColor.rgb, 1.0);
 	#elif (DEBUG == DEBUG_WORLDNORMALS)
@@ -976,8 +965,18 @@ void main(void) {
 		gl_FragColor = vec4( vec3(NdotV), 1.0);
 	#elif (DEBUG == DEBUG_BRDFLUT)
 		gl_FragColor = vec4( fromSRGB( textureLod(brdfLUT, vec2(pbrInputs.NdotV, 1.0-pbrInputs.roughness), 0.0) ).rgb, 1.0);
+	#else
+		#ifdef GAMMA_CORRECTION
+			gl_FragColor = toSRGB( vec4(preGammaColor, 1.0) );
+		#else
+			gl_FragColor = vec4(preGammaColor, 1.0);
+		#endif
 	#endif
 
+	//follow jK advise to avoid discard
+	#if defined(GET_PARALLAXMAP)
+		gl_FragColor = mix(gl_FragColor, vec4(0.0), float(any(badTexCoords)));
+	#endif
 
 	%%FRAGMENT_POST_SHADING%%
 }
