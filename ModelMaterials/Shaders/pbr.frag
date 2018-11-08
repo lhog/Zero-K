@@ -964,7 +964,8 @@ void main(void) {
 	#elif (DEBUG == DEBUG_NDOTV)
 		gl_FragColor = vec4( vec3(NdotV), 1.0);
 	#elif (DEBUG == DEBUG_BRDFLUT)
-		gl_FragColor = vec4( fromSRGB( textureLod(brdfLUT, vec2(pbrInputs.NdotV, 1.0-pbrInputs.roughness), 0.0) ).rgb, 1.0);
+		//gl_FragColor = vec4( fromSRGB( textureLod(brdfLUT, vec2(pbrInputs.NdotV, 1.0-pbrInputs.roughness), 0.0) ).rgb, 1.0);
+	gl_FragColor = vec4( ( textureLod(brdfLUT, vec2(pbrInputs.NdotV, 1.0-pbrInputs.roughness), 0.0) ).rgb, 1.0);
 	#else
 		#ifdef GAMMA_CORRECTION
 			gl_FragColor = toSRGB( vec4(preGammaColor, 1.0) );

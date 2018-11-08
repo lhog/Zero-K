@@ -430,17 +430,18 @@ local function parsePbrMatParams(pbrModel, pbrMap)
 		table.insert(shaderDefinitions, def)
 		table.insert(deferredDefinitions, def)
 		debugIdx = debugIdx + 1
+	end
 
+	for k, v in pairs(pbrDebug) do
 		if v or getBooleanValue(pbrMapDebug[k], getBooleanValue(pbrModelDebug[k], false)) then
 			def = string.format("#define DEBUG DEBUG_%s", string.upper(k))
 			table.insert(shaderDefinitions, def)
 			table.insert(deferredDefinitions, def)
+			break
 		end
 	end
 
-
-
-	Spring.Echo(shaderDefinitions)
+	--Spring.Echo(shaderDefinitions)
 
 	return shaderDefinitions, deferredDefinitions, customStandardUniforms, customDefferedUniforms
 end
@@ -495,6 +496,8 @@ local function createNewMatDef(pbrModel, pbrMap)
 		customStandardUniforms = customStandardUniforms,
 		customDefferedUniforms = customDefferedUniforms,
 	}
+	--Spring.Utilities.TableEcho(newMat, "")
+
 	return newMat
 end
 
