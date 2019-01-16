@@ -215,6 +215,11 @@ local callInLists = {
 	"DrawWorldShadow",
 	"DrawWorldReflection",
 	"DrawWorldRefraction",
+	"DrawGroundPreForward",
+	"DrawGroundPreDeferred",
+	"DrawGroundPostDeferred",
+	"DrawUnitsPostDeferred",
+	"DrawFeaturesPostDeferred",
 	"DrawScreenEffects",
 	"DrawScreenPost",
 	"DrawScreen",
@@ -1888,6 +1893,41 @@ end
 function gadgetHandler:DrawWorldRefraction()
   for _,g in ipairs(self.DrawWorldRefractionList) do
     g:DrawWorldRefraction()
+  end
+  return
+end
+
+function gadgetHandler:DrawGroundPreForward()
+  for _,g in ipairs(self.DrawGroundPreForwardList) do
+    g:DrawGroundPreForward()
+  end
+  return
+end
+
+function gadgetHandler:DrawGroundPreDeferred()
+  for _,g in ipairs(self.DrawGroundPreDeferredList) do
+    g:DrawGroundPreDeferred()
+  end
+  return
+end
+
+function gadgetHandler:DrawGroundPostDeferred()
+  for _,g in ipairs(self.DrawGroundPostDeferredList) do
+    g:DrawGroundPostDeferred()
+  end
+  return
+end
+
+function gadgetHandler:DrawUnitsPostDeferred()
+  for _,g in ipairs(self.DrawUnitsPostDeferredList) do
+    g:DrawUnitsPostDeferred()
+  end
+  return
+end
+
+function gadgetHandler:DrawFeaturesPostDeferred()
+  for _,g in ipairs(self.DrawFeaturesPostDeferredList) do
+    g:DrawFeaturesPostDeferred()
   end
   return
 end

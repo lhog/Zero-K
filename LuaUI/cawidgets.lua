@@ -199,6 +199,7 @@ local flexCallIns = {
   'RecvLuaMsg',
   'StockpileChanged',
   'DrawGenesis',
+  'DrawGroundPreForward',
   'DrawWorld',
   'DrawWorldPreUnit',
   'DrawWorldShadow',
@@ -1530,6 +1531,13 @@ end
 function widgetHandler:DrawGenesis()
   for _,w in ripairs(self.DrawGenesisList) do
     w:DrawGenesis()
+  end
+  return
+end
+
+function widgetHandler:DrawGroundPreForward()
+  for _,w in ripairs(self.DrawGroundPreForwardList) do
+    w:DrawGroundPreForward()
   end
   return
 end
