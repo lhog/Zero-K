@@ -1,106 +1,127 @@
 unitDef = {
-  unitname            = [[jeffy]],
-  name                = [[Jeffy]],
-  description         = [[Jeffy]],
-  acceleration        = 0.36,
-  brakeRate           = 0.205,
-  buildCostEnergy     = 0,
-  buildCostMetal      = 0,
-  builder             = false,
-  buildPic            = [[chicken.png]],
-  buildTime           = 25,
-  canGuard            = true,
-  canMove             = true,
-  canPatrol           = true,
-  category            = [[SWIM]],
+  unitname               = [[jeffy]],
+  name                   = [[jeffy]],
+  description            = [[jeffy Rover]],
+  acceleration           = 0.027,
+  brakeRate              = 0.0385,
+  buildCostMetal         = 250,
+  builder                = false,
+  buildPic               = [[vehassault.png]],
+  canGuard               = true,
+  canMove                = true,
+  canPatrol              = true,
+  category               = [[LAND]],
+  collisionVolumeOffsets = [[0 -5 0]],
+  collisionVolumeScales  = [[42 42 42]],
+  collisionVolumeType    = [[ellipsoid]], 
+  corpse                 = [[DEAD]],
 
-  customParams        = {
+  customParams           = {
+	aimposoffset   = [[0 8 0]],
+	midposoffset   = [[0 3 0]],
+	modelradius    = [[21]],
   },
 
-  explodeAs           = [[NOWEAPON]],
-  footprintX          = 2,
-  footprintZ          = 2,
-  iconType            = [[chicken]],
-  idleAutoHeal        = 20,
-  idleTime            = 300,
-  leaveTracks         = true,
-  maxDamage           = 270,
-  maxSlope            = 36,
-  maxVelocity         = 2.9,
-  minCloakDistance    = 75,
-  movementClass       = [[BHOVER3]],
-  noAutoFire          = false,
-  noChaseCategory     = [[TERRAFORM FIXEDWING SATELLITE GUNSHIP]],
-  objectName          = [[Jeffy.dae]],
-  power               = 100,
-  selfDestructAs      = [[NOWEAPON]],
+  explodeAs              = [[BIG_UNITEX]],
+  footprintX             = 3,
+  footprintZ             = 3,
+  iconType               = [[vehicleassault]],
+  idleAutoHeal           = 5,
+  idleTime               = 1800,
+  leaveTracks            = true,
+  maxDamage              = 1850,
+  maxSlope               = 18,
+  maxVelocity            = 2.95,
+  maxWaterDepth          = 22,
+  minCloakDistance       = 75,
+  movementClass          = [[TANK3]],
+  noAutoFire             = false,
+  noChaseCategory        = [[TERRAFORM FIXEDWING SATELLITE SUB]],
+  objectName             = [[jeffy.dae]],
+  script                 = [[vehassault.cob]],
+  selfDestructAs         = [[BIG_UNITEX]],
 
-  sfxtypes            = {
+  sfxtypes               = {
 
     explosiongenerators = {
-      [[custom:blood_spray]],
-      [[custom:blood_explode]],
-      [[custom:dirt]],
+      [[custom:RAIDMUZZLE]],
+      [[custom:RAIDDUST]],
     },
 
   },
-  sightDistance       = 256,
-  sonarDistance       = 200,
-  trackOffset         = 0,
-  trackStrength       = 8,
-  trackStretch        = 1,
-  trackType           = [[ChickenTrack]],
-  trackWidth          = 18,
-  turnRate            = 806,
-  upright             = false,
-  waterline           = 16,
-  workerTime          = 0,
+  sightDistance          = 385,
+  trackOffset            = 6,
+  trackStrength          = 5,
+  trackStretch           = 1,
+  trackType              = [[StdTank]],
+  trackWidth             = 38,
+  turninplace            = 0,
+  turnRate               = 430,
+  workerTime             = 0,
 
-  weapons             = {
+  weapons                = {
 
     {
-      def                = [[WEAPON]],
-      mainDir            = [[0 0 1]],
-      maxAngleDif        = 120,
-      onlyTargetCategory = [[SWIM LAND SUB SINK TURRET FLOAT SHIP HOVER FIXEDWING GUNSHIP]],
+      def                = [[PLASMA]],
+      badTargetCategory  = [[FIXEDWING]],
+      onlyTargetCategory = [[FIXEDWING LAND SINK TURRET SHIP SWIM FLOAT GUNSHIP HOVER]],
     },
 
   },
 
 
-  weaponDefs          = {
+  weaponDefs             = {
 
-    WEAPON = {
-      name                    = [[Claws]],
-      avoidFeature            = false,
-      avoidFriendly           = false,
-      collideFeature          = false,
-      collideFriendly         = false,
+    PLASMA = {
+      name                    = [[Light Plasma Cannon]],
+      areaOfEffect            = 32,
       craterBoost             = 0,
       craterMult              = 0,
 
-      damage                  = {
-        default = 80,
-        planes  = 80,
-        subs    = 80,
+      customParams        = {
+        reaim_time = 8, -- COB
+		light_camera_height = 1500,
       },
 
-      explosionGenerator      = [[custom:NONE]],
-      impactOnly              = true,
+      damage                  = {
+        default = 210,
+        planes  = 210,
+        subs    = 11.5,
+      },
+
+      explosionGenerator      = [[custom:INGEBORG]],
       impulseBoost            = 0,
       impulseFactor           = 0.4,
-      interceptedByShieldType = 0,
-      range                   = 80,
-      reloadtime              = 1.2,
-      size                    = 0,
-      soundHit                = [[chickens/chickenbig2]],
-      soundStart              = [[chickens/chicken]],
-      targetborder            = 1,
-      tolerance               = 5000,
+      interceptedByShieldType = 1,
+      noSelfDamage            = true,
+      range                   = 320,
+      reloadtime              = 2,
+      soundHit                = [[weapon/cannon/cannon_hit2]],
+      soundStart              = [[weapon/cannon/medplasma_fire]],
       turret                  = true,
-      waterWeapon             = true,
       weaponType              = [[Cannon]],
-      weaponVelocity          = 500,
+      weaponVelocity          = 215,
+    },
+
+  },
+
+
+  featureDefs            = {
+
+    DEAD  = {
+      blocking         = true,
+      featureDead      = [[HEAP]],
+      footprintX       = 2,
+      footprintZ       = 2,
+      object           = [[corraid_dead.s3o]],
+    },
+
+
+    HEAP  = {
+      blocking         = false,
+      footprintX       = 2,
+      footprintZ       = 2,
+      object           = [[debris2x2c.s3o]],
     },
 
   },
