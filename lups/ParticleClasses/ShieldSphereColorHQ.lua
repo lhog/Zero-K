@@ -6,25 +6,8 @@ local ShieldSphereColorHQParticle = {}
 ShieldSphereColorHQParticle.__index = ShieldSphereColorHQParticle
 
 local sphereList = {}
-local shieldShader
 
-local methodUniform
-local timerUniform
-local color1Uniform
-local color2Uniform
-local colorMultUniform
-local colorMixUniform
-local shieldPosUniform
-local shieldRechargingNoiseUniform
-local shieldSizeUniform
-local shieldSizeDriftUniform
-local marginUniform
-local uvMulUniform
-
-local viewInvUniform
-
-local hitPointCountUniform
-local hitPointsUniform
+local LuaShader = VFS.Include("LuaRules/Utilities/LuaShader.lua")
 
 
 -----------------------------------------------------------------------------------------------------------------
@@ -39,10 +22,10 @@ function ShieldSphereColorHQParticle.GetInfo()
 		layer		= -23, --// extreme simply z-ordering :x
 
 		--// gfx requirement
-		fbo			= false,
+		fbo			= true,
 		shader		= true,
-		rtt			= false,
-		ctt			= false,
+		rtt			= true,
+		ctt			= true,
 	}
 end
 
@@ -62,19 +45,261 @@ ShieldSphereColorHQParticle.Default = {
 	shieldSize = "large",
 }
 
+
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+local GL_RGBA16F = 0x881A
+local GL_RGBA32F = 0x8814
+local accumulationTexFormats = {
+	GL_RGBA32F,
+	GL_RGBA16F,
+}
+
+local GL_R8 = 0x8229
+local GL_R16F = 0x822D
+local revealTexFormats = {
+	GL_R16F,
+	GL_R8,
+}
+
+local GL_DEPTH_COMPONENT16 = 0x81A5
+local GL_DEPTH_COMPONENT32 = 0x81A7
+local GL_DEPTH_COMPONENT24 = 0x81A6
+local depthTexFormats = {
+	GL_R16F,
+	(Platform.glSupport24bitDepthBuffer and GL_DEPTH_COMPONENT24) or GL_DEPTH_COMPONENT16,
+}
+
+local GL_COLOR_ATTACHMENT0_EXT = 0x8CE0
+local GL_COLOR_ATTACHMENT1_EXT = 0x8CE1
+
+local function new(class, options)
+	return setmetatable(
+	{
+		options = options or {},
+		optBetterPrecision = options.betterPrecision or false,
+
+		screenSizeW, screenSizeH = nil, nil
+
+		shaderFile = nil,
+
+		opaqueDepthTex = nil,
+		accumulationTex = nil,
+		revealTex = nil,
+
+		oitFBO = nil,
+
+		oitClearShader = nil,
+		oitFillShader = nil,
+		blitShader = nil,
+
+		geometryLists = {},
+	}, class)
+end
+
+local ShieldDrawer = setmetatable({}, {
+	__call = function(self, ...) return new(self, ...) end,
+	})
+ShieldDrawer.__index = ShieldDrawer
+
+function ShieldDrawer:Initialize()
+	if not self.vsx then
+		self.vsx, self.vsy = gl.GetViewSizes()
+	end
+	local vsx, vsy = self.vsx, self.vsy
+
+	self.shaderFile = VFS.Include("lups/ParticleClasses/ShieldSphereColorHQ.glsl")
+	if not self.shaderFile then
+		Spring.Echo("Error!")
+	end
+
+	local commonTexOpts = {
+		border = false,
+		min_filter = GL.LINEAR,
+		mag_filter = GL.LINEAR,
+		wrap_s = GL.CLAMP_TO_EDGE,
+		wrap_t = GL.CLAMP_TO_EDGE,
+	}
+
+	local fmtStartIdx = (self.optBetterPrecision and 1) or 2
+
+	for fmtIdx = fmtStartIdx, 2 do
+		local fmt = depthTexFormats[fmtIdx]
+		commonTexOpts.format = fmt
+		self.opaqueDepthTex = gl.CreateTexture(vsx, vsy, commonTexOpts)
+		if self.opaqueDepthTex then
+			break
+		end
+	end
+	if not self.opaqueDepthTex then
+		Spring.Echo("Error3!")
+	end
+
+	for fmtIdx = fmtStartIdx, 2 do
+		local fmt = accumulationTexFormats[fmtIdx]
+		commonTexOpts.format = fmt
+		self.accumulationTex = gl.CreateTexture(vsx, vsy, commonTexOpts)
+		if self.accumulationTex then
+			break
+		end
+	end
+	if not self.accumulationTex then
+		Spring.Echo("Error4!")
+	end
+
+	for fmtIdx = fmtStartIdx, 2 do
+		local fmt = revealTexFormats[fmtIdx]
+		commonTexOpts.format = fmt
+		self.revealTex = gl.CreateTexture(vsx, vsy, commonTexOpts)
+		if self.revealTex then
+			break
+		end
+	end
+	if not self.revealTex then
+		Spring.Echo("Error5!")
+	end
+
+	self.oitFBO = gl.CreateFBO({
+		depth = self.opaqueDepthTex,
+		color0 = self.accumulationTex,
+		color1 = self.revealTex,
+		drawbuffers = {GL_COLOR_ATTACHMENT0_EXT, GL_COLOR_ATTACHMENT1_EXT},
+	})
+
+	if not gl.IsValidFBO(self.oitFBO) then
+		Spring.Echo("Error2!")
+	end
+
+	self.oitClearShader = LuaShader({
+		vertex = self.shaderFile.oitClearShaderVertex,
+		fragment = self.shaderFile.oitClearShaderFragment,
+	})
+	self.oitClearShader:Initialize()
+
+	self.oitFillShader = LuaShader({
+		vertex = self.shaderFile.oitFillShaderVertex,
+		fragment = self.shaderFile.oitFillShaderFragment,
+	})
+	self.oitFillShader:Initialize()
+
+	self.blitShader = LuaShader({
+		vertex = self.shaderFile.blitShaderVertex,
+		fragment = self.shaderFile.blitShaderFragment,
+		uniformFloat = {
+			screenSize = {vsx, vsy},
+		},
+		uniformInt = {
+			accumulationTex = 0,
+			revealTex = 1,
+		},
+	})
+	self.blitShader:Initialize()
+
+	self.geometryLists = {
+		huge = gl.CreateList(DrawSphere, 0, 0, 0, 1, 140),
+		large = gl.CreateList(DrawSphere, 0, 0, 0, 1, 60),
+		medium = gl.CreateList(DrawSphere, 0, 0, 0, 1, 50),
+		small = gl.CreateList(DrawSphere, 0, 0, 0, 1, 40),
+	}
+end
+
+function ShieldDrawer:ViewResize(vsx, vsy)
+	self.vsx, self.vsy = vsx, vsy
+	self:Finalize()
+	self:Initialize()
+end
+
+-- http://casual-effects.blogspot.com/2014/03/weighted-blended-order-independent.html
+function ShieldDrawer:BeginRenderPass()
+	--copy depth texture from default FBO
+	gl.CopyToTexture(self.opaqueDepthTex, 0, 0, 0, 0, self.vsx, self.vsy)
+
+	gl.DepthTest(true)
+	gl.DepthMask(false)
+
+	gl.ActiveFBO(self.oitFBO, function()
+		-- uncomment the following carefully
+		--gl.Clear(GL.COLOR_BUFFER_BIT,0,0,0,0)
+
+		-- don't do that cause opaqueDepthTex is bound.
+		--gl.Clear(GL.DEPTH_BUFFER_BIT)
+
+		-- TODO replace shader with separate FBOs + gl.Clear()?
+		-- Clear colors as outlined in the article
+		self.oitClearShader:ActivateWith( function ()
+			gl.PushPopMatrix(function()
+				gl.MatrixMode(GL.PROJECTION); gl.LoadIdentity();
+				gl.MatrixMode(GL.MODELVIEW); gl.LoadIdentity();
+				gl.TexRect(-1, -1, 1, 1)
+			end)
+		end)
+	end)
+end
+
+function ShieldDrawer:DoRenderPass(effect)
+	self.oitFillShader:ActivateWith( function ()
+		--self.oitFillShader:SetUniformFloat
+		gl.CallList(self.geometryLists[effect.shieldSize])
+	end)
+end
+
+function ShieldDrawer:EndRenderPass()
+	gl.PushPopMatrix(function()
+		gl.MatrixMode(GL.PROJECTION); gl.LoadIdentity();
+		gl.MatrixMode(GL.MODELVIEW); gl.LoadIdentity();
+
+		-- As per article: set blend func: GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA
+		gl.Blending(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA)
+
+		self.blitShader:ActivateWith( function ()
+			gl.Texture(0, self.accumulationTex)
+			gl.Texture(1, self.revealTex)
+
+			gl.TexRect(-1, -1, 1, 1)
+		end)
+	end)
+
+end
+
+
+function ShieldDrawer:Finalize()
+	gl.DeleteTexture(self.opaqueDepthTex)
+	gl.DeleteTexture(self.accumulationTex)
+	gl.DeleteTexture(self.revealTex)
+
+	gl.DeleteFBO(self.oitFBO)
+
+	self.oitClearShader:Finalize()
+	self.oitFillShader:Finalize()
+	self.blitShader:Finalize()
+
+	for _, list in pairs(self.geometryLists) do
+		gl.DeleteList(list)
+	end
+end
+
+
+
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+
+local shieldDrawer = ShieldDrawer()
+shieldDrawer.scream = Script.CreateScream()
+shieldDrawer.scream.func = function()
+	shieldDrawer:Finalize()
+	shieldDrawer = nil
+end
+
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+
+
 -- (dx, dy, dz, mag, AoE) x 8
 local MAX_POINTS = 8
-
------------------------------------------------------------------------------------------------------------------
------------------------------------------------------------------------------------------------------------------
-
-local glCallList = gl.CallList
 
 function ShieldSphereColorHQParticle:Visible()
 	return self.visibleToMyAllyTeam
 end
-
-local PACE = 400
 
 local lastTexture = ""
 
@@ -117,7 +342,7 @@ function ShieldSphereColorHQParticle:Draw()
 	if (GG and GG.GetShieldHitPositions) then --means high quality shield rendering is in place
 		hitTable = GG.GetShieldHitPositions(self.unit)
 	end
-	
+
 	gl.Uniform(color1Uniform, col1[1], col1[2], col1[3], col1[4])
 	gl.Uniform(color2Uniform, col2[1], col2[2], col2[3], col2[4])
 	gl.Uniform(colorMultUniform, 1, 1, 1, 1)
@@ -246,7 +471,7 @@ ____FS_CODE_DEFS_____
 	uniform vec4 colorMix;
 
 	uniform float uvMul;
-	
+
 	uniform float noiseLevel;
 
 	uniform float sizeDrift;
@@ -296,7 +521,7 @@ ____FS_CODE_DEFS_____
 	}
 
 			//
-			// Description : Array and textureless GLSL 2D/3D/4D simplex 
+			// Description : Array and textureless GLSL 2D/3D/4D simplex
 			//               noise functions.
 			//      Author : Ian McEwan, Ashima Arts.
 			//  Maintainer : stegu
@@ -305,7 +530,7 @@ ____FS_CODE_DEFS_____
 			//               Distributed under the MIT License. See LICENSE file.
 			//               https://github.com/ashima/webgl-noise
 			//               https://github.com/stegu/webgl-noise
-			// 
+			//
 
 			vec3 mod289(vec3 x) {
 				return x - floor(x * (1.0 / 289.0)) * 289.0;
@@ -325,7 +550,7 @@ ____FS_CODE_DEFS_____
 			}
 
 			float snoise(vec3 v)
-				{ 
+				{
 				const vec2  C = vec2(1.0/6.0, 1.0/3.0) ;
 				const vec4  D = vec4(0.0, 0.5, 1.0, 2.0);
 
@@ -348,10 +573,10 @@ ____FS_CODE_DEFS_____
 				vec3 x3 = x0 - D.yyy;      // -1.0+3.0*C.x = -0.5 = -D.y
 
 			// Permutations
-				i = mod289(i); 
-				vec4 p = permute( permute( permute( 
+				i = mod289(i);
+				vec4 p = permute( permute( permute(
 									 i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
-								 + i.y + vec4(0.0, i1.y, i2.y, 1.0 )) 
+								 + i.y + vec4(0.0, i1.y, i2.y, 1.0 ))
 								 + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
 
 			// Gradients: 7x7 points over a square, mapped onto an octahedron.
@@ -395,7 +620,7 @@ ____FS_CODE_DEFS_____
 			// Mix final noise value
 				vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
 				m = m * m;
-				return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), 
+				return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1),
 																			dot(p2,x2), dot(p3,x3) ) );
 			}
 
@@ -449,7 +674,7 @@ ____FS_CODE_DEFS_____
 			texel = texture2D(tex0, uvo);
 		else
 			texel = vec4(0.0);
-		
+
 		float alphaAdd = 0.0;
 		float noiseMult = 1;
 		if (shieldVariant == 1) {
