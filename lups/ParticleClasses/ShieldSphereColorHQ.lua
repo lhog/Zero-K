@@ -19,19 +19,19 @@ function ShieldSphereColorHQParticle.GetInfo()
 		backup		= "ShieldSphereColor", --// backup class, if this class doesn't work (old cards,ati's,etc.)
 		desc		= "",
 
-		layer		= -23, --// extreme simply z-ordering :x
+		layer		= -math.huge, --// extreme simply z-ordering :x
 
 		--// gfx requirement
 		fbo			= true,
 		shader		= true,
-		rtt			= true,
+		rtt			= false,
 		ctt			= true,
 	}
 end
 
 ShieldSphereColorHQParticle.Default = {
 	pos				= {0, 0, 0}, -- start pos
-	layer			= -23,
+	layer			= -math.huge,
 
 	life			= math.huge,
 
@@ -186,8 +186,8 @@ function ShieldDrawer:Initialize()
 			screenSize = {vsx, vsy},
 		},
 		uniformInt = {
-			texA = 0,
-			texB = 1,
+			texA = 30,
+			texB = 31,
 		},
 	}, "ShieldHQ/2D Compositing Pass")
 	self.blitShader:Initialize()
@@ -219,44 +219,39 @@ function ShieldDrawer:BeginRenderPass()
 	)
 	]]--
 
-	--Spring.Echo("self.opaqueDepthTex", self.opaqueDepthTex)
-
 	gl.ActiveFBO(self.oitFBO, function()
 		gl.DepthTest(true)
 		--gl.DepthTest(false)
 		gl.DepthMask(false)
 		gl.Clear(GL.COLOR_BUFFER_BIT, 0, 0, 0, 1)
 		gl.Blending(true)
-		--gl.BlendFuncSeparate(GL.ONE, GL.ONE, GL.ZERO, GL.ONE_MINUS_SRC_ALPHA);
-		self.oitFillShader:Activate()
+		gl.BlendFuncSeparate(GL.ONE, GL.ONE, GL.ZERO, GL.ONE_MINUS_SRC_ALPHA);
+		--self.oitFillShader:Activate()
 	end)
 
-	--gl.UnsafeSetFBO(self.oitFBO)
 	self.oitFillShader:Activate()
 
 	local gf = Spring.GetGameFrame()
-	self.oitFillShader:SetUniformFloat("gameFrame", gf)
+	self.oitFillShader:SetUniformFloatAlways("gameFrame", gf)
+
+	local near, far = gl.GetViewRange(0) -- CAMTYPE_PLAYER = 0
+	--Spring.Echo("near, far = ", near, far)
+	self.oitFillShader:SetUniformFloat("depthRangeSpring", near, far)
 
 	self.oitFillShader:SetUniformMatrix("viewMat", "view")
 	self.oitFillShader:SetUniformMatrix("projMat", "projection")
-	--self.oitFillShader:SetUniformMatrix("viewProjMat", "viewprojection")
+	
+	--gl.UnsafeSetFBO(self.oitFBO)
 end
 
 function ShieldDrawer:DoRenderPass(info)
-	local	a11, a12, a13, a14,
-			a21, a22, a23, a24,
-			a31, a32, a33, a34,
-			a41, a42, a43, a44 = Spring.GetUnitTransformMatrix(info.unit)
+	local posx, posy, posz = Spring.GetUnitPosition(info.unitID)
+	posx, posy, posz = posx + info.pos[1], posy + info.pos[2], posz + info.pos[3]
 
-	-- Apply scale
-	a11, a22, a33 = a11 * info.size, a22 * info.size, a33 * info.size
+	local pitch, yaw, roll = Spring.GetUnitRotation(info.unitID)
 
-	self.oitFillShader:SetUniformMatrixAlways("worldMat",
-		a11, a12, a13, a14,
-		a21, a22, a23, a24,
-		a31, a32, a33, a34,
-		a41, a42, a43, a44
-	)
+	self.oitFillShader:SetUniformFloat("translationScale", posx, posy, posz, info.size)
+	self.oitFillShader:SetUniformFloat("rotPYR", pitch, yaw, roll)
 
 	self.oitFillShader:SetUniformInt("effectIndex", 0)
 
@@ -265,17 +260,18 @@ function ShieldDrawer:DoRenderPass(info)
 	end)
 end
 
-local debug = true
+--local debug = true
 function ShieldDrawer:EndRenderPass()
 	self.oitFillShader:Deactivate()
 	--gl.UnsafeSetFBO(nil)
 
 	if debug then
 		gl.ActiveFBO(self.oitFBO, function()
-			gl.SaveImage( 0, 0, self.vsx, self.vsy, string.format("drawframe_%s.png", select(1, Spring.GetGameFrame())) )
+			gl.SaveImage( 0, 0, self.vsx, self.vsy, string.format("texA_%s.png", select(1, Spring.GetGameFrame())) )
 		end)
 		debug = false
 	end
+
 
 	gl.PushPopMatrix(function()
 		gl.MatrixMode(GL.PROJECTION); gl.LoadIdentity();
@@ -283,15 +279,27 @@ function ShieldDrawer:EndRenderPass()
 
 		--gl.Blending(true)
 		-- As per article: set blend func: GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA
-		gl.Blending(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA)
+		--gl.BlendFunc(GL.ONE_MINUS_SRC_ALPHA, GL.SRC_ALPHA);
+
+		-- As per revised article it should be: SRC_ALPHA, ONE_MINUS_SRC_ALPHA
+		gl.BlendFunc(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA);
 
 		self.blitShader:ActivateWith( function ()
-			gl.Texture(0, self.texA)
-			gl.Texture(1, self.texB)
+			gl.Texture(30, self.texA)
+			gl.Texture(31, self.texB)
 
 			gl.TexRect(-1, -1, 1, 1)
 		end)
 	end)
+
+
+	gl.Texture(30, false)
+	gl.Texture(31, false)
+--[[
+
+	gl.DepthTest(false)
+	gl.Blending(false)
+]]--
 
 end
 
@@ -344,7 +352,7 @@ end
 
 function ShieldSphereColorHQParticle:Initialize()
 	local opt = {
-		betterPrecision = true,
+		betterPrecision = false,
 	}
 	shieldDrawer = shieldDrawer or ShieldDrawer(opt)
 	shieldDrawer:Initialize()
