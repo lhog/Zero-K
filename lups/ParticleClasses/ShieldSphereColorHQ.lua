@@ -19,7 +19,7 @@ function ShieldSphereColorHQParticle.GetInfo()
 		backup		= "ShieldSphereColor", --// backup class, if this class doesn't work (old cards,ati's,etc.)
 		desc		= "",
 
-		layer		= -math.huge, --// extreme simply z-ordering :x
+		layer		= -23, --// extreme simply z-ordering :x
 
 		--// gfx requirement
 		fbo			= true,
@@ -31,7 +31,7 @@ end
 
 ShieldSphereColorHQParticle.Default = {
 	pos				= {0, 0, 0}, -- start pos
-	layer			= -math.huge,
+	layer			= -23,
 
 	life			= math.huge,
 
@@ -80,6 +80,8 @@ local function new(class, options)
 	{
 		optBetterPrecision = opt.betterPrecision or false,
 
+		vpx = nil,
+		vpy = nil,
 		vsx = nil,
 		vsy = nil,
 
@@ -104,9 +106,8 @@ local ShieldDrawer = setmetatable({}, {
 ShieldDrawer.__index = ShieldDrawer
 
 function ShieldDrawer:Initialize()
-	if not self.vsx then
-		self.vsx, self.vsy = gl.GetViewSizes()
-	end
+	--self.vsx, self.vsy = gl.GetViewSizes()
+	self.vsx, self.vsy, self.vpx, self.vpy = Spring.Orig.GetViewGeometry()
 	local vsx, vsy = self.vsx, self.vsy
 
 	self.shaderFile = VFS.Include("lups/ParticleClasses/ShieldSphereColorHQ.glsl")
@@ -116,10 +117,10 @@ function ShieldDrawer:Initialize()
 
 	local commonTexOpts = {
 		border = false,
-		--min_filter = GL.LINEAR,
-		--mag_filter = GL.LINEAR,
-		min_filter = GL.NEAREST,
-		mag_filter = GL.NEAREST,
+		min_filter = GL.LINEAR,
+		mag_filter = GL.LINEAR,
+		--min_filter = GL.NEAREST,
+		--mag_filter = GL.NEAREST,
 		wrap_s = GL.CLAMP_TO_EDGE,
 		wrap_t = GL.CLAMP_TO_EDGE,
 	}
@@ -182,9 +183,9 @@ function ShieldDrawer:Initialize()
 	self.blitShader = LuaShader({
 		vertex = self.shaderFile.blitShaderVertex,
 		fragment = self.shaderFile.blitShaderFragment,
-		uniformFloat = {
+		--[[uniformFloat = {
 			screenSize = {vsx, vsy},
-		},
+		},]]--
 		uniformInt = {
 			texA = 30,
 			texB = 31,
@@ -200,8 +201,7 @@ function ShieldDrawer:Initialize()
 	}
 end
 
-function ShieldDrawer:ViewResize(vsx, vsy)
-	self.vsx, self.vsy = vsx, vsy
+function ShieldDrawer:ViewResize()
 	self:Finalize()
 	self:Initialize()
 end
@@ -209,7 +209,7 @@ end
 -- http://casual-effects.blogspot.com/2014/03/weighted-blended-order-independent.html
 function ShieldDrawer:BeginRenderPass()
 	--copy depth texture from default FBO
-	gl.CopyToTexture(self.opaqueDepthTex, 0, 0, 0, 0, self.vsx, self.vsy)
+	gl.CopyToTexture(self.opaqueDepthTex, 0, 0, self.vpx, self.vpy, self.vsx, self.vsy)
 
 	--[[
 	gl.BlitFBO(
@@ -240,8 +240,8 @@ function ShieldDrawer:BeginRenderPass()
 
 	self.oitFillShader:SetUniformMatrix("viewMat", "view")
 	self.oitFillShader:SetUniformMatrix("projMat", "projection")
-	
-	--gl.UnsafeSetFBO(self.oitFBO)
+
+	gl.UnsafeSetFBO(self.oitFBO)
 end
 
 function ShieldDrawer:DoRenderPass(info)
@@ -255,15 +255,15 @@ function ShieldDrawer:DoRenderPass(info)
 
 	self.oitFillShader:SetUniformInt("effectIndex", 0)
 
-	gl.ActiveFBO(self.oitFBO, function()
+	--gl.ActiveFBO(self.oitFBO, function()
 		gl.CallList(self.geometryLists[info.shieldSize])
-	end)
+	--end)
 end
 
 --local debug = true
 function ShieldDrawer:EndRenderPass()
 	self.oitFillShader:Deactivate()
-	--gl.UnsafeSetFBO(nil)
+	gl.UnsafeSetFBO(nil)
 
 	if debug then
 		gl.ActiveFBO(self.oitFBO, function()
