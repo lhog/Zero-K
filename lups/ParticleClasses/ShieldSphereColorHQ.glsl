@@ -137,7 +137,9 @@ container.blitShaderFragment = [[
 			vec3 averageColor = accum.rgb / max(accum.a, 0.00001);
 
 			gl_FragColor = vec4(averageColor, 1.0 - revealage);
-			//gl_FragColor = vec4(accum.rgb / clamp(accum.a, 1e-4, 5e4), r);
+			
+			//gl_FragColor.rgb *= gl_FragColor.a; //alpha pre-multiply
+			//gl_FragColor.a = pow(gl_FragColor.a, 1.5);
 		#else
 			gl_FragColor = accum;
 		#endif

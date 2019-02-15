@@ -76,43 +76,41 @@ local GL_COLOR_ATTACHMENT1_EXT = 0x8CE1
 
 local GL_FUNC_ADD = 0x8006
 local GL_MIN = 0x8007
+local GL_MAX = 0x8008
 
-local function new(class, options)
-	local opt = options or {}
-	return setmetatable(
-	{
-		betterPrecision = (opt.betterPrecision == nil and false) or opt.betterPrecision,
-		doOIT = (opt.doOIT == nil and true) or opt.doOIT,
+local ShieldDrawerOIT = setmetatable ({},{
+	__call = function(self, options)
+		local opt = options or {}
+		return setmetatable(
+		{
+			betterPrecision = (opt.betterPrecision == nil and false) or opt.betterPrecision,
 
-		vpx = nil,
-		vpy = nil,
-		vsx = nil,
-		vsy = nil,
+			vpx = nil,
+			vpy = nil,
+			vsx = nil,
+			vsy = nil,
 
-		shaderFile = nil,
+			shaderFile = nil,
 
-		opaqueDepthTex = nil,
-		texA = nil,
-		texB = nil,
+			opaqueDepthTex = nil,
+			texA = nil,
+			texB = nil,
 
-		oitFBO = nil,
+			oitFBO = nil,
 
-		oitFillShader = nil,
-		blitShader = nil,
+			oitFillShader = nil,
+			blitShader = nil,
 
-		effectsList = {},
-		maxEffectIndex = 3, -- ^^^^
+			effectsList = {},
+			maxEffectIndex = 3, -- ^^^^
 
-		geometryLists = {},
-	}, class)
-end
+			geometryLists = {},
+		}, self)
+	end })
 
-local ShieldDrawer = setmetatable({}, {
-	__call = function(self, ...) return new(self, ...) end,
-	})
-ShieldDrawer.__index = ShieldDrawer
+ShieldDrawerOIT.__index = ShieldDrawerOIT
 
-function ShieldDrawer:Initialize()
+function ShieldDrawerOIT:Initialize()
 	--self.vsx, self.vsy = gl.GetViewSizes()
 	self.vsx, self.vsy, self.vpx, self.vpy = Spring.Orig.GetViewGeometry()
 	local vsx, vsy = self.vsx, self.vsy
@@ -123,10 +121,10 @@ function ShieldDrawer:Initialize()
 	end
 
 	self.shaderFile.blitShaderFragment =
-	self.shaderFile.blitShaderFragment:gsub("###DO_OIT###", (self.doOIT and "1") or "0")
+	self.shaderFile.blitShaderFragment:gsub("###DO_OIT###", "1")
 
 	self.shaderFile.oitFillShaderFragment =
-	self.shaderFile.oitFillShaderFragment:gsub("###DO_OIT###", (self.doOIT and "1") or "0")
+	self.shaderFile.oitFillShaderFragment:gsub("###DO_OIT###", "1")
 
 	local commonTexOpts = {
 		border = false,
@@ -214,13 +212,13 @@ function ShieldDrawer:Initialize()
 	}
 end
 
-function ShieldDrawer:ViewResize()
+function ShieldDrawerOIT:ViewResize()
 	self:Finalize()
 	self:Initialize()
 end
 
 -- http://casual-effects.blogspot.com/2014/03/weighted-blended-order-independent.html
-function ShieldDrawer:BeginRenderPass()
+function ShieldDrawerOIT:BeginRenderPass()
 	--copy depth texture from default FBO
 	gl.CopyToTexture(self.opaqueDepthTex, 0, 0, self.vpx, self.vpy, self.vsx, self.vsy)
 
@@ -236,17 +234,9 @@ function ShieldDrawer:BeginRenderPass()
 		gl.DepthTest(true)
 		--gl.DepthTest(false)
 		gl.DepthMask(false)
-		if self.doOIT then
-			gl.Clear(GL.COLOR_BUFFER_BIT, 0, 0, 0, 1)
-		else
-			gl.Clear(GL.COLOR_BUFFER_BIT, 0, 0, 0, 0)
-		end
+		gl.Clear(GL.COLOR_BUFFER_BIT, 0, 0, 0, 1)
 		gl.Blending(true)
-		if self.doOIT then
-			gl.BlendFuncSeparate(GL.ONE, GL.ONE, GL.ZERO, GL.ONE_MINUS_SRC_ALPHA)
-		else
-			gl.BlendFunc(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA)
-		end
+		gl.BlendFuncSeparate(GL.ONE, GL.ONE, GL.ZERO, GL.ONE_MINUS_SRC_ALPHA)
 		--self.oitFillShader:Activate()
 	end)
 
@@ -255,10 +245,8 @@ function ShieldDrawer:BeginRenderPass()
 	local gf = Spring.GetGameFrame()
 	self.oitFillShader:SetUniformFloatAlways("gameFrame", gf)
 
-	if self.doOIT then
-		local near, far = gl.GetViewRange(0) -- CAMTYPE_PLAYER = 0
-		self.oitFillShader:SetUniformFloat("depthRangeSpring", near, far)
-	end
+	local near, far = gl.GetViewRange(0) -- CAMTYPE_PLAYER = 0
+	self.oitFillShader:SetUniformFloat("depthRangeSpring", near, far)
 
 	self.oitFillShader:SetUniformMatrix("viewMat", "view")
 	self.oitFillShader:SetUniformMatrix("projMat", "projection")
@@ -272,13 +260,13 @@ function ShieldDrawer:BeginRenderPass()
 	}
 end
 
-function ShieldDrawer:DoRenderPass(info)
+function ShieldDrawerOIT:DoRenderPass(info)
 	local effectIndex = 0 --TODO
 	table.insert(self.effectsList[effectIndex], info)
 end
 
 local debug = true
-function ShieldDrawer:EndRenderPass()
+function ShieldDrawerOIT:EndRenderPass()
 
 	gl.ActiveFBO(self.oitFBO, function()
 		--from smaller shields to larger (kinda back to front in stacked shields environment)
@@ -309,7 +297,7 @@ function ShieldDrawer:EndRenderPass()
 	if debug then
 		gl.PushPopMatrix(function()
 			gl.MatrixMode(GL.PROJECTION); gl.LoadIdentity();
-			gl.MatrixMode(GL.MODELVIEW); gl.LoadIdentity();	
+			gl.MatrixMode(GL.MODELVIEW); gl.LoadIdentity();
 			gl.ActiveFBO(self.oitFBO, function()
 				gl.SaveImage( 0, 0, self.vsx, self.vsy, string.format("texA_%s.png", select(1, Spring.GetGameFrame())) )
 			end)
@@ -317,16 +305,12 @@ function ShieldDrawer:EndRenderPass()
 		debug = false
 	end
 
+	gl.BlendEquationSeparate(GL_FUNC_ADD, GL_MIN)
+	--gl.BlendEquationSeparate(GL_FUNC_ADD, GL_MAX)
 
-	if self.doOIT then
-		-- As per revised article it should be: SRC_ALPHA, ONE_MINUS_SRC_ALPHA
-		gl.BlendEquationSeparate(GL_FUNC_ADD, GL_MIN)
-		gl.BlendFunc(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA)
-	else
-		--gl.BlendFuncSeparate(GL.ONE, GL.ONE, GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA)
-		gl.BlendFunc(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA)
-		--gl.BlendFuncSeparate(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA, GL.ONE, GL.ONE);
-	end
+	-- As per revised article it should be: SRC_ALPHA, ONE_MINUS_SRC_ALPHA
+	gl.BlendFunc(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA) --alpha NO pre-multiply
+	--gl.BlendFunc(GL.ONE, GL.ONE_MINUS_SRC_ALPHA) --alpha pre-multiply
 
 	gl.PushPopMatrix(function()
 		gl.MatrixMode(GL.PROJECTION); gl.LoadIdentity();
@@ -340,25 +324,12 @@ function ShieldDrawer:EndRenderPass()
 		end)
 	end)
 
-	if self.doOIT then
-		gl.BlendEquation(GL_FUNC_ADD)
-	else
-		gl.BlendFunc(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA)
-	end
-
-
-	--gl.Texture(30, false)
-	--gl.Texture(31, false)
---[[
-
-	gl.DepthTest(false)
-	gl.Blending(false)
-]]--
+	gl.BlendEquation(GL_FUNC_ADD)
 
 end
 
 
-function ShieldDrawer:Finalize()
+function ShieldDrawerOIT:Finalize()
 	self.vsx, self.vsy = nil, nil
 
 	gl.DeleteTexture(self.opaqueDepthTex)
@@ -407,9 +378,8 @@ end
 function ShieldSphereColorHQParticle:Initialize()
 	local opt = {
 		betterPrecision = false,
-		doOIT = false,
 	}
-	shieldDrawer = shieldDrawer or ShieldDrawer(opt)
+	shieldDrawer = shieldDrawer or ShieldDrawerOIT(opt)
 	shieldDrawer:Initialize()
 end
 
