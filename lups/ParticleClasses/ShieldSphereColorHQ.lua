@@ -74,11 +74,15 @@ local depthTexFormats = {
 local GL_COLOR_ATTACHMENT0_EXT = 0x8CE0
 local GL_COLOR_ATTACHMENT1_EXT = 0x8CE1
 
+local GL_FUNC_ADD = 0x8006
+local GL_MIN = 0x8007
+
 local function new(class, options)
 	local opt = options or {}
 	return setmetatable(
 	{
-		optBetterPrecision = opt.betterPrecision or false,
+		betterPrecision = (opt.betterPrecision == nil and false) or opt.betterPrecision,
+		doOIT = (opt.doOIT == nil and true) or opt.doOIT,
 
 		vpx = nil,
 		vpy = nil,
@@ -95,6 +99,9 @@ local function new(class, options)
 
 		oitFillShader = nil,
 		blitShader = nil,
+
+		effectsList = {},
+		maxEffectIndex = 3, -- ^^^^
 
 		geometryLists = {},
 	}, class)
@@ -115,17 +122,23 @@ function ShieldDrawer:Initialize()
 		Spring.Echo("Error!")
 	end
 
+	self.shaderFile.blitShaderFragment =
+	self.shaderFile.blitShaderFragment:gsub("###DO_OIT###", (self.doOIT and "1") or "0")
+
+	self.shaderFile.oitFillShaderFragment =
+	self.shaderFile.oitFillShaderFragment:gsub("###DO_OIT###", (self.doOIT and "1") or "0")
+
 	local commonTexOpts = {
 		border = false,
-		min_filter = GL.LINEAR,
-		mag_filter = GL.LINEAR,
-		--min_filter = GL.NEAREST,
-		--mag_filter = GL.NEAREST,
+		--min_filter = GL.LINEAR,
+		--mag_filter = GL.LINEAR,
+		min_filter = GL.NEAREST,
+		mag_filter = GL.NEAREST,
 		wrap_s = GL.CLAMP_TO_EDGE,
 		wrap_t = GL.CLAMP_TO_EDGE,
 	}
 
-	local fmtStartIdx = (self.optBetterPrecision and 1) or 2
+	local fmtStartIdx = (self.betterPrecision and 1) or 2
 
 	for fmtIdx = fmtStartIdx, 2 do
 		local fmt = depthTexFormats[fmtIdx]
@@ -223,9 +236,17 @@ function ShieldDrawer:BeginRenderPass()
 		gl.DepthTest(true)
 		--gl.DepthTest(false)
 		gl.DepthMask(false)
-		gl.Clear(GL.COLOR_BUFFER_BIT, 0, 0, 0, 1)
+		if self.doOIT then
+			gl.Clear(GL.COLOR_BUFFER_BIT, 0, 0, 0, 1)
+		else
+			gl.Clear(GL.COLOR_BUFFER_BIT, 0, 0, 0, 0)
+		end
 		gl.Blending(true)
-		gl.BlendFuncSeparate(GL.ONE, GL.ONE, GL.ZERO, GL.ONE_MINUS_SRC_ALPHA);
+		if self.doOIT then
+			gl.BlendFuncSeparate(GL.ONE, GL.ONE, GL.ZERO, GL.ONE_MINUS_SRC_ALPHA)
+		else
+			gl.BlendFunc(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA)
+		end
 		--self.oitFillShader:Activate()
 	end)
 
@@ -234,55 +255,82 @@ function ShieldDrawer:BeginRenderPass()
 	local gf = Spring.GetGameFrame()
 	self.oitFillShader:SetUniformFloatAlways("gameFrame", gf)
 
-	local near, far = gl.GetViewRange(0) -- CAMTYPE_PLAYER = 0
-	--Spring.Echo("near, far = ", near, far)
-	self.oitFillShader:SetUniformFloat("depthRangeSpring", near, far)
+	if self.doOIT then
+		local near, far = gl.GetViewRange(0) -- CAMTYPE_PLAYER = 0
+		self.oitFillShader:SetUniformFloat("depthRangeSpring", near, far)
+	end
 
 	self.oitFillShader:SetUniformMatrix("viewMat", "view")
 	self.oitFillShader:SetUniformMatrix("projMat", "projection")
 
-	gl.UnsafeSetFBO(self.oitFBO)
+	--gl.UnsafeSetFBO(self.oitFBO)
+	self.effectsList = {
+		[0] = {}, -- small
+		[1] = {}, -- medium
+		[2] = {}, -- large
+		[3] = {}, -- huge
+	}
 end
 
 function ShieldDrawer:DoRenderPass(info)
-	local posx, posy, posz = Spring.GetUnitPosition(info.unitID)
-	posx, posy, posz = posx + info.pos[1], posy + info.pos[2], posz + info.pos[3]
-
-	local pitch, yaw, roll = Spring.GetUnitRotation(info.unitID)
-
-	self.oitFillShader:SetUniformFloat("translationScale", posx, posy, posz, info.size)
-	self.oitFillShader:SetUniformFloat("rotPYR", pitch, yaw, roll)
-
-	self.oitFillShader:SetUniformInt("effectIndex", 0)
-
-	--gl.ActiveFBO(self.oitFBO, function()
-		gl.CallList(self.geometryLists[info.shieldSize])
-	--end)
+	local effectIndex = 0 --TODO
+	table.insert(self.effectsList[effectIndex], info)
 end
 
---local debug = true
+local debug = true
 function ShieldDrawer:EndRenderPass()
+
+	gl.ActiveFBO(self.oitFBO, function()
+		--from smaller shields to larger (kinda back to front in stacked shields environment)
+		for effectIndex = 0, self.maxEffectIndex do
+
+			if #self.effectsList[effectIndex] > 0 then
+				self.oitFillShader:SetUniformInt("effectIndex", effectIndex)
+				for _, info in pairs(self.effectsList[effectIndex]) do
+					local posx, posy, posz = Spring.GetUnitPosition(info.unitID)
+					posx, posy, posz = posx + info.pos[1], posy + info.pos[2], posz + info.pos[3]
+
+					local pitch, yaw, roll = Spring.GetUnitRotation(info.unitID)
+
+					self.oitFillShader:SetUniformFloat("translationScale", posx, posy, posz, info.size)
+					self.oitFillShader:SetUniformFloat("rotPYR", pitch, yaw, roll)
+
+					self.oitFillShader:SetUniformInt("effectIndex", 0)
+
+					gl.CallList(self.geometryLists[info.shieldSize])
+				end
+			end
+
+		end
+	end)
+
 	self.oitFillShader:Deactivate()
-	gl.UnsafeSetFBO(nil)
 
 	if debug then
-		gl.ActiveFBO(self.oitFBO, function()
-			gl.SaveImage( 0, 0, self.vsx, self.vsy, string.format("texA_%s.png", select(1, Spring.GetGameFrame())) )
+		gl.PushPopMatrix(function()
+			gl.MatrixMode(GL.PROJECTION); gl.LoadIdentity();
+			gl.MatrixMode(GL.MODELVIEW); gl.LoadIdentity();	
+			gl.ActiveFBO(self.oitFBO, function()
+				gl.SaveImage( 0, 0, self.vsx, self.vsy, string.format("texA_%s.png", select(1, Spring.GetGameFrame())) )
+			end)
 		end)
 		debug = false
 	end
 
 
+	if self.doOIT then
+		-- As per revised article it should be: SRC_ALPHA, ONE_MINUS_SRC_ALPHA
+		gl.BlendEquationSeparate(GL_FUNC_ADD, GL_MIN)
+		gl.BlendFunc(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA)
+	else
+		--gl.BlendFuncSeparate(GL.ONE, GL.ONE, GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA)
+		gl.BlendFunc(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA)
+		--gl.BlendFuncSeparate(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA, GL.ONE, GL.ONE);
+	end
+
 	gl.PushPopMatrix(function()
 		gl.MatrixMode(GL.PROJECTION); gl.LoadIdentity();
 		gl.MatrixMode(GL.MODELVIEW); gl.LoadIdentity();
-
-		--gl.Blending(true)
-		-- As per article: set blend func: GL_ONE_MINUS_SRC_ALPHA, GL_SRC_ALPHA
-		--gl.BlendFunc(GL.ONE_MINUS_SRC_ALPHA, GL.SRC_ALPHA);
-
-		-- As per revised article it should be: SRC_ALPHA, ONE_MINUS_SRC_ALPHA
-		gl.BlendFunc(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA);
 
 		self.blitShader:ActivateWith( function ()
 			gl.Texture(30, self.texA)
@@ -292,9 +340,15 @@ function ShieldDrawer:EndRenderPass()
 		end)
 	end)
 
+	if self.doOIT then
+		gl.BlendEquation(GL_FUNC_ADD)
+	else
+		gl.BlendFunc(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA)
+	end
 
-	gl.Texture(30, false)
-	gl.Texture(31, false)
+
+	--gl.Texture(30, false)
+	--gl.Texture(31, false)
 --[[
 
 	gl.DepthTest(false)
@@ -353,6 +407,7 @@ end
 function ShieldSphereColorHQParticle:Initialize()
 	local opt = {
 		betterPrecision = false,
+		doOIT = false,
 	}
 	shieldDrawer = shieldDrawer or ShieldDrawer(opt)
 	shieldDrawer:Initialize()

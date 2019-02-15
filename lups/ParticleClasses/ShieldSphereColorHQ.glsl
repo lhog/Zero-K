@@ -68,28 +68,33 @@ container.oitFillShaderFragment = [[
 		return depthRangeTarget.x + vdNorm * (depthRangeTarget.y - depthRangeTarget.x);
 	}
 
+	#define DO_OIT ###DO_OIT###
+
 	void main() {
 
 		vec4 color = vec4(0.0, 0.0, 0.5, 0.2);
 
+		#if DO_OIT
+			// Looks like to give same result
+			#if 1
+				// Assuming that the projection matrix is a perspective projection
+				// gl_FragCoord.w returns the inverse of the oPos.w register from the vertex shader
+				float viewDepth = abs(1.0 / gl_FragCoord.w);
+			#else
+				float viewDepth = abs(viewPos.z);
+			#endif
 
-		// Looks like to give same result
-		#if 1
-			// Assuming that the projection matrix is a perspective projection
-			// gl_FragCoord.w returns the inverse of the oPos.w register from the vertex shader
-			float viewDepth = abs(1.0 / gl_FragCoord.w);
+			// Tuned to work well with FP16 accumulation buffers and 0.001 < linearDepth < 2.5
+			// See Equation (9) from http://jcgt.org/published/0002/02/09/
+			float linearTargetDepth = RescaleToTargetRange(viewDepth);
+
+			float weight = clamp(0.03 / (1e-5 + pow(linearTargetDepth, 4.0)), 1e-2, 3e3);
+
+			gl_FragData[0] = vec4(color.rgb * color.a * weight, color.a);
+			gl_FragData[1].r = color.a * weight;
 		#else
-			float viewDepth = abs(viewPos.z);
+			gl_FragData[0] = color;
 		#endif
-
-		// Tuned to work well with FP16 accumulation buffers and 0.001 < linearDepth < 2.5
-		// See Equation (9) from http://jcgt.org/published/0002/02/09/
-		float linearTargetDepth = RescaleToTargetRange(viewDepth);
-
-		float weight = clamp(0.03 / (1e-5 + pow(linearTargetDepth, 4.0)), 1e-2, 3e3);
-
-		gl_FragData[0] = vec4(color.rgb * color.a * weight, color.a);
-		gl_FragData[1].r = color.a * weight;
 
 		//gl_FragData[0] = color;
 		//gl_FragColor = color;
@@ -112,48 +117,31 @@ container.blitShaderFragment = [[
 	uniform sampler2D texA;
 	uniform sampler2D texB;
 
+	#define DO_OIT ###DO_OIT###
+
 	void main() {
 		vec4 accum = texelFetch(texA, ivec2(gl_FragCoord.xy), 0);
 
-		float revealage = accum.a;
-		if (revealage == 1.0) {
-			// Save the blending and color texture fetch cost
-			discard;
-		}
+		#if DO_OIT
+			float revealage = accum.a;
+			if (revealage == 1.0) {
+				// Save the blending and color texture fetch cost
+				discard;
+			}
 
-		accum.a = texelFetch(texB, ivec2(gl_FragCoord.xy), 0).r;
-		if ( any(isinf(abs(accum))) ) {
-			accum.rgb = vec3(accum.a);
-		}
-		
-		vec3 averageColor = accum.rgb / max(accum.a, 0.00001);
-		
-		gl_FragColor = vec4(averageColor, 1.0 - revealage);
-		//gl_FragColor = vec4(accum.rgb / clamp(accum.a, 1e-4, 5e4), r);
+			accum.a = texelFetch(texB, ivec2(gl_FragCoord.xy), 0).r;
+			if ( any(isinf(abs(accum))) ) {
+				accum.rgb = vec3(accum.a);
+			}
+
+			vec3 averageColor = accum.rgb / max(accum.a, 0.00001);
+
+			gl_FragColor = vec4(averageColor, 1.0 - revealage);
+			//gl_FragColor = vec4(accum.rgb / clamp(accum.a, 1e-4, 5e4), r);
+		#else
+			gl_FragColor = accum;
+		#endif
 	}
-
-	/*
-	void main() {
-    int2 C = int2(gl_FragCoord.xy);
-    float  revealage = texelFetch(revealageTexture, C, 0).r;
-    if (revealage == 1.0) {
-        // Save the blending and color texture fetch cost
-        discard;
-    }
-
-    float4 accum     = texelFetch(accumTexture, C, 0);
-    // Suppress overflow
-    if (isinf(maxComponent(abs(accum)))) {
-        accum.rgb = float3(accum.a);
-    }
-
-    float3 averageColor = accum.rgb / max(accum.a, 0.00001);
-
-
-    // dst =  (accum.rgb / accum.a) * (1 - revealage) + dst * revealage
-    gl_FragColor = float4(averageColor, 1.0 - revealage);
-	}
-	*/
 ]]
 
 return container
