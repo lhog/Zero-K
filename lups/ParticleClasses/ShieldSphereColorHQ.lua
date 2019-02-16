@@ -133,13 +133,16 @@ function ShieldDrawer:Initialize()
 	self.shaderFile.blitShaderFragment =
 	self.shaderFile.blitShaderFragment:gsub("###DO_OIT###", "1")
 
+	
+	self.shaderFile.oitFillShaderFragment =
+	self.shaderFile.oitFillShaderFragment:gsub("###MSAA_LEVEL###", tostring(self.msaaLevel))
 	self.shaderFile.oitFillShaderFragment =
 	self.shaderFile.oitFillShaderFragment:gsub("###DO_OIT###", "1")
 
 	local commonTexOpts = {
 		target = ((self.msaaLevel > 1) and GL_TEXTURE_2D_MULTISAMPLE) or GL_TEXTURE_2D,
 		samples = ((self.msaaLevel > 1) and self.msaaLevel) or nil,
-	
+
 		border = false,
 		--min_filter = GL.LINEAR,
 		--mag_filter = GL.LINEAR,
@@ -194,6 +197,7 @@ function ShieldDrawer:Initialize()
 		drawbuffers = {GL_COLOR_ATTACHMENT0_EXT, GL_COLOR_ATTACHMENT1_EXT},
 	})
 
+
 	if not gl.IsValidFBO(self.oitFBO) then
 		Spring.Echo("Error2!")
 	end
@@ -201,6 +205,9 @@ function ShieldDrawer:Initialize()
 	self.oitFillShader = LuaShader({
 		vertex = self.shaderFile.oitFillShaderVertex,
 		fragment = self.shaderFile.oitFillShaderFragment,
+		uniformInt = {
+			depthTex = 30,
+		},		
 	}, "ShieldHQ/3D Transparency Pass")
 	self.oitFillShader:Initialize()
 
@@ -233,20 +240,23 @@ end
 -- http://casual-effects.blogspot.com/2014/03/weighted-blended-order-independent.html
 function ShieldDrawer:BeginRenderPass()
 	--copy depth texture from default FBO
-	gl.CopyToTexture(self.opaqueDepthTex, 0, 0, self.vpx, self.vpy, self.vsx, self.vsy)
-
-	--[[
-	gl.BlitFBO(
-		nil, 			0, 0, self.vsx, self.vsy, -- fboSrc , int x0Src,y0Src,x1Src,y1Src,
-		self.oitFBO, 	0, 0, self.vsx, self.vsy, -- fboDst , int x0Dst,y0Dst,x1Dst,y1Dst
-		GL.DEPTH_BUFFER_BIT, GL.NEAREST -- [, number mask = GL_COLOR_BUFFER_BIT [, number filter = GL_NEAREST ] ]
-	)
-	]]--
+--	if self.msaaLevel == 1 then
+		--gl.CopyToTexture(self.opaqueDepthTex, 0, 0, self.vpx, self.vpy, self.vsx, self.vsy)
+--	else
+		--[[gl.BlitFBO(
+			nil, 			0, 0, self.vsx, self.vsy, -- fboSrc , int x0Src,y0Src,x1Src,y1Src,
+			self.oitFBO, 	0, 0, self.vsx, self.vsy, -- fboDst , int x0Dst,y0Dst,x1Dst,y1Dst
+			GL.DEPTH_BUFFER_BIT, GL.NEAREST -- [, number mask = GL_COLOR_BUFFER_BIT [, number filter = GL_NEAREST ] ]
+		)]]--
+	--end
 
 	gl.ActiveFBO(self.oitFBO, function()
 		gl.DepthTest(true)
 		--gl.DepthTest(false)
-		gl.DepthMask(false)
+		--gl.DepthMask(false)
+		gl.DepthMask(true)
+		gl.Clear(GL.DEPTH_BUFFER_BIT)
+		
 		gl.Clear(GL.COLOR_BUFFER_BIT, 0, 0, 0, 1)
 		gl.Blending(true)
 		gl.BlendFuncSeparate(GL.ONE, GL.ONE, GL.ZERO, GL.ONE_MINUS_SRC_ALPHA)
@@ -391,7 +401,7 @@ function ShieldSphereColorHQParticle:Initialize()
 	local opt = {
 		betterPrecision = false,
 		--msaaLevel = (newEngine and Spring.GetConfigInt("MSAALevel", 1)) or 1,
-		msaaLevel = 2,
+		msaaLevel = 1,
 	}
 	shieldDrawer = shieldDrawer or ShieldDrawer(opt)
 	shieldDrawer:Initialize()

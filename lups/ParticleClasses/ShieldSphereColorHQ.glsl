@@ -54,15 +54,31 @@ container.oitFillShaderVertex = [[
 container.oitFillShaderFragment = [[
 	#version 150 compatibility
 	#line 20020
+	
+	#define MSAA_LEVEL ###MSAA_LEVEL###
+	#if (MSAA_LEVEL > 1)
+		uniform sampler2DMS depthTex;
+	#else
+		uniform sampler2D depthTex;
+	#end
 
 	uniform vec2 depthRangeSpring;
 
 	in vec4 modelPos;
 	in vec4 worldPos;
 	in vec4 viewPos;
+	
+	#if (MSAA_LEVEL > 1)
+		vec4 texelFetchMS(sampler2DMS tex, ivec2 coord) {
+			vec4 result = vec4(0.0);
+			for (int sample = 0; sample < MSAA_LEVEL; ++sample) {
+				result += texelFetch(tex, coord, sample);
+			}
+			return result / vec4(MSAA_LEVEL);
+		}
+	#endif	
 
 	const vec2 depthRangeTarget = vec2(0.001, 2.5);
-
 	float RescaleToTargetRange(float viewDepth) {
 		float vdNorm = (viewDepth - depthRangeSpring.x) / (depthRangeSpring.y - depthRangeSpring.x);
 		return depthRangeTarget.x + vdNorm * (depthRangeTarget.y - depthRangeTarget.x);
