@@ -112,15 +112,35 @@ container.blitShaderVertex = [[
 
 container.blitShaderFragment = [[
 	#version 150 compatibility
-	#line 40003
+	#line 40115
 
-	uniform sampler2D texA;
-	uniform sampler2D texB;
+	#define MSAA_LEVEL ###MSAA_LEVEL###
+	#if (MSAA_LEVEL > 1)
+		uniform sampler2DMS texA;
+		uniform sampler2DMS texB;
+	#else
+		uniform sampler2D texA;
+		uniform sampler2D texB;
+	#endif
 
 	#define DO_OIT ###DO_OIT###
 
+	#if (MSAA_LEVEL > 1)
+		vec4 texelFetchMS(sampler2DMS tex, ivec2 coord) {
+			vec4 result = vec4(0.0);
+			for (int sample = 0; sample < MSAA_LEVEL; ++sample) {
+				result += texelFetch(tex, coord, sample);
+			}
+			return result / vec4(MSAA_LEVEL);
+		}
+	#endif
+
 	void main() {
-		vec4 accum = texelFetch(texA, ivec2(gl_FragCoord.xy), 0);
+		#if (MSAA_LEVEL > 1)
+			vec4 accum = texelFetchMS(texA, ivec2(gl_FragCoord.xy));
+		#else
+			vec4 accum = texelFetch(texA, ivec2(gl_FragCoord.xy), 0);
+		#endif
 
 		#if DO_OIT
 			float revealage = accum.a;
@@ -129,7 +149,12 @@ container.blitShaderFragment = [[
 				discard;
 			}
 
-			accum.a = texelFetch(texB, ivec2(gl_FragCoord.xy), 0).r;
+			#if (MSAA_LEVEL > 1)
+				accum.a = texelFetchMS(texB, ivec2(gl_FragCoord.xy)).r;
+			#else
+				accum.a = texelFetch(texB, ivec2(gl_FragCoord.xy), 0).r;
+			#endif
+
 			if ( any(isinf(abs(accum))) ) {
 				accum.rgb = vec3(accum.a);
 			}
@@ -137,7 +162,7 @@ container.blitShaderFragment = [[
 			vec3 averageColor = accum.rgb / max(accum.a, 0.00001);
 
 			gl_FragColor = vec4(averageColor, 1.0 - revealage);
-			
+
 			//gl_FragColor.rgb *= gl_FragColor.a; //alpha pre-multiply
 			//gl_FragColor.a = pow(gl_FragColor.a, 1.5);
 		#else

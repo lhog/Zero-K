@@ -63,6 +63,9 @@ local texBFormats = {
 	GL_R16F,
 }
 
+local GL_TEXTURE_2D_MULTISAMPLE = 0x9100
+local GL_TEXTURE_2D = 0x0DE1
+
 local GL_DEPTH_COMPONENT16 = 0x81A5
 local GL_DEPTH_COMPONENT32 = 0x81A7
 local GL_DEPTH_COMPONENT24 = 0x81A6
@@ -78,12 +81,17 @@ local GL_FUNC_ADD = 0x8006
 local GL_MIN = 0x8007
 local GL_MAX = 0x8008
 
-local ShieldDrawerOIT = setmetatable ({},{
+-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------------------------
+
+local ShieldDrawer = setmetatable ({},{
 	__call = function(self, options)
 		local opt = options or {}
 		return setmetatable(
 		{
 			betterPrecision = (opt.betterPrecision == nil and false) or opt.betterPrecision,
+			msaaLevel = opt.msaaLevel or 1,
+			doOIT = (opt.doOIT == nil and true) or opt.doOIT,
 
 			vpx = nil,
 			vpy = nil,
@@ -108,9 +116,9 @@ local ShieldDrawerOIT = setmetatable ({},{
 		}, self)
 	end })
 
-ShieldDrawerOIT.__index = ShieldDrawerOIT
+ShieldDrawer.__index = ShieldDrawer
 
-function ShieldDrawerOIT:Initialize()
+function ShieldDrawer:Initialize()
 	--self.vsx, self.vsy = gl.GetViewSizes()
 	self.vsx, self.vsy, self.vpx, self.vpy = Spring.Orig.GetViewGeometry()
 	local vsx, vsy = self.vsx, self.vsy
@@ -121,12 +129,17 @@ function ShieldDrawerOIT:Initialize()
 	end
 
 	self.shaderFile.blitShaderFragment =
+	self.shaderFile.blitShaderFragment:gsub("###MSAA_LEVEL###", tostring(self.msaaLevel))
+	self.shaderFile.blitShaderFragment =
 	self.shaderFile.blitShaderFragment:gsub("###DO_OIT###", "1")
 
 	self.shaderFile.oitFillShaderFragment =
 	self.shaderFile.oitFillShaderFragment:gsub("###DO_OIT###", "1")
 
 	local commonTexOpts = {
+		target = ((self.msaaLevel > 1) and GL_TEXTURE_2D_MULTISAMPLE) or GL_TEXTURE_2D,
+		samples = ((self.msaaLevel > 1) and self.msaaLevel) or nil,
+	
 		border = false,
 		--min_filter = GL.LINEAR,
 		--mag_filter = GL.LINEAR,
@@ -212,13 +225,13 @@ function ShieldDrawerOIT:Initialize()
 	}
 end
 
-function ShieldDrawerOIT:ViewResize()
+function ShieldDrawer:ViewResize()
 	self:Finalize()
 	self:Initialize()
 end
 
 -- http://casual-effects.blogspot.com/2014/03/weighted-blended-order-independent.html
-function ShieldDrawerOIT:BeginRenderPass()
+function ShieldDrawer:BeginRenderPass()
 	--copy depth texture from default FBO
 	gl.CopyToTexture(self.opaqueDepthTex, 0, 0, self.vpx, self.vpy, self.vsx, self.vsy)
 
@@ -260,13 +273,13 @@ function ShieldDrawerOIT:BeginRenderPass()
 	}
 end
 
-function ShieldDrawerOIT:DoRenderPass(info)
+function ShieldDrawer:DoRenderPass(info)
 	local effectIndex = 0 --TODO
 	table.insert(self.effectsList[effectIndex], info)
 end
 
 local debug = true
-function ShieldDrawerOIT:EndRenderPass()
+function ShieldDrawer:EndRenderPass()
 
 	gl.ActiveFBO(self.oitFBO, function()
 		--from smaller shields to larger (kinda back to front in stacked shields environment)
@@ -329,7 +342,7 @@ function ShieldDrawerOIT:EndRenderPass()
 end
 
 
-function ShieldDrawerOIT:Finalize()
+function ShieldDrawer:Finalize()
 	self.vsx, self.vsy = nil, nil
 
 	gl.DeleteTexture(self.opaqueDepthTex)
@@ -345,8 +358,6 @@ function ShieldDrawerOIT:Finalize()
 		gl.DeleteList(list)
 	end
 end
-
-
 
 -----------------------------------------------------------------------------------------------------------------
 -----------------------------------------------------------------------------------------------------------------
@@ -376,10 +387,13 @@ end
 -----------------------------------------------------------------------------------------------------------------
 
 function ShieldSphereColorHQParticle:Initialize()
+	local newEngine = Script.IsEngineMinVersion(104, 0, 1000) --TODO figure out commit number
 	local opt = {
 		betterPrecision = false,
+		--msaaLevel = (newEngine and Spring.GetConfigInt("MSAALevel", 1)) or 1,
+		msaaLevel = 2,
 	}
-	shieldDrawer = shieldDrawer or ShieldDrawerOIT(opt)
+	shieldDrawer = shieldDrawer or ShieldDrawer(opt)
 	shieldDrawer:Initialize()
 end
 
