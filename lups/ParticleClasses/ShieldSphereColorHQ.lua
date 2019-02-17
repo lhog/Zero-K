@@ -74,12 +74,16 @@ local depthTexFormats = {
 	(Platform.glSupport24bitDepthBuffer and GL_DEPTH_COMPONENT24) or GL_DEPTH_COMPONENT16,
 }
 
+local GL_DEPTH24_STENCIL8 = 0x88F0
+
 local GL_COLOR_ATTACHMENT0_EXT = 0x8CE0
 local GL_COLOR_ATTACHMENT1_EXT = 0x8CE1
 
 local GL_FUNC_ADD = 0x8006
 local GL_MIN = 0x8007
 local GL_MAX = 0x8008
+
+local GL_RENDERBUFFER_EXT = 0x8D41
 
 -----------------------------------------------------------------------------------------------------------------
 -----------------------------------------------------------------------------------------------------------------
@@ -101,6 +105,8 @@ local ShieldDrawer = setmetatable ({},{
 			shaderFile = nil,
 
 			opaqueDepthTex = nil,
+			opaqueDepthRBO = nil,
+
 			texA = nil,
 			texB = nil,
 
@@ -133,7 +139,7 @@ function ShieldDrawer:Initialize()
 	self.shaderFile.blitShaderFragment =
 	self.shaderFile.blitShaderFragment:gsub("###DO_OIT###", "1")
 
-	
+
 	self.shaderFile.oitFillShaderFragment =
 	self.shaderFile.oitFillShaderFragment:gsub("###MSAA_LEVEL###", tostring(self.msaaLevel))
 	self.shaderFile.oitFillShaderFragment =
@@ -141,7 +147,6 @@ function ShieldDrawer:Initialize()
 
 	local commonTexOpts = {
 		target = ((self.msaaLevel > 1) and GL_TEXTURE_2D_MULTISAMPLE) or GL_TEXTURE_2D,
-		samples = ((self.msaaLevel > 1) and self.msaaLevel) or nil,
 
 		border = false,
 		--min_filter = GL.LINEAR,
@@ -164,6 +169,25 @@ function ShieldDrawer:Initialize()
 	end
 	if not self.opaqueDepthTex then
 		Spring.Echo("Error3!")
+	end
+
+	for fmtIdx = fmtStartIdx, 2 do
+		local fmt = depthTexFormats[fmtIdx]
+		self.opaqueDepthRBO	= gl.CreateRBO(vsx, vsy,
+		{
+			target = GL_RENDERBUFFER_EXT,
+			format = fmt,
+			multisample = (self.msaaLevel > 1),
+		})
+		if self.opaqueDepthRBO.valid then
+			break
+		else
+			gl.DeleteRBO(self.opaqueDepthRBO)
+		end
+	end
+
+	if not self.opaqueDepthRBO.valid then
+		Spring.Echo("Error10!")
 	end
 
 	for fmtIdx = fmtStartIdx, 2 do
@@ -192,6 +216,7 @@ function ShieldDrawer:Initialize()
 
 	self.oitFBO = gl.CreateFBO({
 		depth = self.opaqueDepthTex,
+		--depth = self.opaqueDepthRBO,
 		color0 = self.texA,
 		color1 = self.texB,
 		drawbuffers = {GL_COLOR_ATTACHMENT0_EXT, GL_COLOR_ATTACHMENT1_EXT},
@@ -207,7 +232,7 @@ function ShieldDrawer:Initialize()
 		fragment = self.shaderFile.oitFillShaderFragment,
 		uniformInt = {
 			depthTex = 30,
-		},		
+		},
 	}, "ShieldHQ/3D Transparency Pass")
 	self.oitFillShader:Initialize()
 
@@ -240,23 +265,19 @@ end
 -- http://casual-effects.blogspot.com/2014/03/weighted-blended-order-independent.html
 function ShieldDrawer:BeginRenderPass()
 	--copy depth texture from default FBO
---	if self.msaaLevel == 1 then
-		--gl.CopyToTexture(self.opaqueDepthTex, 0, 0, self.vpx, self.vpy, self.vsx, self.vsy)
---	else
-		--[[gl.BlitFBO(
-			nil, 			0, 0, self.vsx, self.vsy, -- fboSrc , int x0Src,y0Src,x1Src,y1Src,
-			self.oitFBO, 	0, 0, self.vsx, self.vsy, -- fboDst , int x0Dst,y0Dst,x1Dst,y1Dst
-			GL.DEPTH_BUFFER_BIT, GL.NEAREST -- [, number mask = GL_COLOR_BUFFER_BIT [, number filter = GL_NEAREST ] ]
-		)]]--
-	--end
+	gl.BlitFBO(
+		nil, 			self.vpx, self.vpy, self.vsx, self.vsy, -- fboSrc , int x0Src,y0Src,x1Src,y1Src,
+		self.oitFBO, 	self.vpx, self.vpy, self.vsx, self.vsy, -- fboDst , int x0Dst,y0Dst,x1Dst,y1Dst
+		GL.DEPTH_BUFFER_BIT, GL.NEAREST -- [, number mask = GL_COLOR_BUFFER_BIT [, number filter = GL_NEAREST ] ]
+	)
 
 	gl.ActiveFBO(self.oitFBO, function()
 		gl.DepthTest(true)
 		--gl.DepthTest(false)
-		--gl.DepthMask(false)
-		gl.DepthMask(true)
-		gl.Clear(GL.DEPTH_BUFFER_BIT)
-		
+		gl.DepthMask(false)
+		--gl.DepthMask(true)
+		--gl.Clear(GL.DEPTH_BUFFER_BIT)
+
 		gl.Clear(GL.COLOR_BUFFER_BIT, 0, 0, 0, 1)
 		gl.Blending(true)
 		gl.BlendFuncSeparate(GL.ONE, GL.ONE, GL.ZERO, GL.ONE_MINUS_SRC_ALPHA)
@@ -318,13 +339,15 @@ function ShieldDrawer:EndRenderPass()
 	self.oitFillShader:Deactivate()
 
 	if debug then
-		gl.PushPopMatrix(function()
-			gl.MatrixMode(GL.PROJECTION); gl.LoadIdentity();
-			gl.MatrixMode(GL.MODELVIEW); gl.LoadIdentity();
-			gl.ActiveFBO(self.oitFBO, function()
-				gl.SaveImage( 0, 0, self.vsx, self.vsy, string.format("texA_%s.png", select(1, Spring.GetGameFrame())) )
+		if self.msaaLevel <= 1 then
+			gl.PushPopMatrix(function()
+				gl.MatrixMode(GL.PROJECTION); gl.LoadIdentity();
+				gl.MatrixMode(GL.MODELVIEW); gl.LoadIdentity();
+				gl.ActiveFBO(self.oitFBO, function()
+					gl.SaveImage( 0, 0, self.vsx, self.vsy, string.format("texA_%s.png", select(1, Spring.GetGameFrame())) )
+				end)
 			end)
-		end)
+		end
 		debug = false
 	end
 
@@ -356,6 +379,7 @@ function ShieldDrawer:Finalize()
 	self.vsx, self.vsy = nil, nil
 
 	gl.DeleteTexture(self.opaqueDepthTex)
+	gl.DeleteRBO(self.opaqueDepthRBO)
 	gl.DeleteTexture(self.texA)
 	gl.DeleteTexture(self.texB)
 
@@ -400,8 +424,8 @@ function ShieldSphereColorHQParticle:Initialize()
 	local newEngine = Script.IsEngineMinVersion(104, 0, 1000) --TODO figure out commit number
 	local opt = {
 		betterPrecision = false,
-		--msaaLevel = (newEngine and Spring.GetConfigInt("MSAALevel", 1)) or 1,
-		msaaLevel = 1,
+		msaaLevel = (newEngine and Spring.GetConfigInt("MSAALevel", 1)) or 1,
+		--msaaLevel = 0,
 	}
 	shieldDrawer = shieldDrawer or ShieldDrawer(opt)
 	shieldDrawer:Initialize()
