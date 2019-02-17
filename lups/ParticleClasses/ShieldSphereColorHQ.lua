@@ -171,7 +171,7 @@ function ShieldDrawer:Initialize()
 	if not self.opaqueDepthTex then
 		Spring.Echo("Error3!")
 	end
-
+--[[
 	for fmtIdx = fmtStartIdx, 2 do
 		local fmt = depthTexFormats[fmtIdx]
 		self.opaqueDepthRBO	= gl.CreateRBO(vsx, vsy,
@@ -190,7 +190,7 @@ function ShieldDrawer:Initialize()
 	if not self.opaqueDepthRBO.valid then
 		Spring.Echo("Error10!")
 	end
-
+]]--
 	for fmtIdx = fmtStartIdx, 2 do
 		local fmt = texAFormats[fmtIdx]
 		commonTexOpts.format = fmt
@@ -232,7 +232,7 @@ function ShieldDrawer:Initialize()
 		vertex = self.shaderFile.oitFillShaderVertex,
 		fragment = self.shaderFile.oitFillShaderFragment,
 		uniformInt = {
-			depthTex = 30,
+			depthTex = 29,
 		},
 	}, "ShieldHQ/3D Transparency Pass")
 	self.oitFillShader:Initialize()
@@ -314,6 +314,7 @@ local debug = true
 function ShieldDrawer:EndRenderPass()
 
 	gl.ActiveFBO(self.oitFBO, function()
+		gl.Texture(29, self.opaqueDepthTex)
 		--from smaller shields to larger (kinda back to front in stacked shields environment)
 		for effectIndex = 0, self.maxEffectIndex do
 
@@ -388,7 +389,7 @@ function ShieldDrawer:Finalize()
 	self.vsx, self.vsy = nil, nil
 
 	gl.DeleteTexture(self.opaqueDepthTex)
-	gl.DeleteRBO(self.opaqueDepthRBO)
+	--gl.DeleteRBO(self.opaqueDepthRBO)
 	gl.DeleteTexture(self.texA)
 	gl.DeleteTexture(self.texB)
 
