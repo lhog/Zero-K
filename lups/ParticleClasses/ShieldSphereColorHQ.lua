@@ -284,6 +284,8 @@ function ShieldDrawer:BeginRenderPass()
 		gl.BlendFuncSeparate(GL.ONE, GL.ONE, GL.ZERO, GL.ONE_MINUS_SRC_ALPHA)
 		--self.oitFillShader:Activate()
 	end)
+	
+	gl.Texture(29, self.opaqueDepthTex)
 
 	self.oitFillShader:Activate()
 
@@ -293,6 +295,7 @@ function ShieldDrawer:BeginRenderPass()
 	local near, far = gl.GetViewRange(0) -- CAMTYPE_PLAYER = 0
 	self.oitFillShader:SetUniformFloat("depthRangeSpring", near, far)
 
+	--self.oitFillShader:SetUniformMatrix("inverseViewMat", "viewinverse")
 	self.oitFillShader:SetUniformMatrix("viewMat", "view")
 	self.oitFillShader:SetUniformMatrix("projMat", "projection")
 
@@ -313,8 +316,7 @@ end
 local debug = true
 function ShieldDrawer:EndRenderPass()
 
-	gl.ActiveFBO(self.oitFBO, function()
-		gl.Texture(29, self.opaqueDepthTex)
+	gl.ActiveFBO(self.oitFBO, function()		
 		--from smaller shields to larger (kinda back to front in stacked shields environment)
 		for effectIndex = 0, self.maxEffectIndex do
 
