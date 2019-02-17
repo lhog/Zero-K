@@ -147,6 +147,7 @@ function ShieldDrawer:Initialize()
 
 	local commonTexOpts = {
 		target = ((self.msaaLevel > 1) and GL_TEXTURE_2D_MULTISAMPLE) or GL_TEXTURE_2D,
+		samples = ((self.msaaLevel > 1) and self.msaaLevel) or nil,
 
 		border = false,
 		--min_filter = GL.LINEAR,
@@ -177,7 +178,7 @@ function ShieldDrawer:Initialize()
 		{
 			target = GL_RENDERBUFFER_EXT,
 			format = fmt,
-			multisample = (self.msaaLevel > 1),
+			samples = self.msaaLevel,
 		})
 		if self.opaqueDepthRBO.valid then
 			break
@@ -343,9 +344,17 @@ function ShieldDrawer:EndRenderPass()
 			gl.PushPopMatrix(function()
 				gl.MatrixMode(GL.PROJECTION); gl.LoadIdentity();
 				gl.MatrixMode(GL.MODELVIEW); gl.LoadIdentity();
+
+				self.oitFBO.readbuffer = GL_COLOR_ATTACHMENT0_EXT
 				gl.ActiveFBO(self.oitFBO, function()
-					gl.SaveImage( 0, 0, self.vsx, self.vsy, string.format("texA_%s.png", select(1, Spring.GetGameFrame())) )
+					gl.SaveImage( 0, 0, self.vsx, self.vsy, string.format("texA_%s.png", select(1, Spring.GetGameFrame())), {alpha = true} )
 				end)
+
+				self.oitFBO.readbuffer = GL_COLOR_ATTACHMENT1_EXT
+				gl.ActiveFBO(self.oitFBO, function()
+					gl.SaveImage( 0, 0, self.vsx, self.vsy, string.format("texB_%s.png", select(1, Spring.GetGameFrame())), {alpha = true} )
+				end)
+
 			end)
 		end
 		debug = false
@@ -421,7 +430,7 @@ end
 -----------------------------------------------------------------------------------------------------------------
 
 function ShieldSphereColorHQParticle:Initialize()
-	local newEngine = Script.IsEngineMinVersion(104, 0, 1000) --TODO figure out commit number
+	local newEngine = Script.IsEngineMinVersion(104, 0, 1015) --TODO figure out commit number
 	local opt = {
 		betterPrecision = false,
 		msaaLevel = (newEngine and Spring.GetConfigInt("MSAALevel", 1)) or 1,
