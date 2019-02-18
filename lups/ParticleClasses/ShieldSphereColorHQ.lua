@@ -134,16 +134,17 @@ function ShieldDrawer:Initialize()
 		Spring.Echo("Error!")
 	end
 
-	self.shaderFile.blitShaderFragment =
-	self.shaderFile.blitShaderFragment:gsub("###MSAA_LEVEL###", tostring(self.msaaLevel))
-	self.shaderFile.blitShaderFragment =
-	self.shaderFile.blitShaderFragment:gsub("###DO_OIT###", "1")
-
-
 	self.shaderFile.oitFillShaderFragment =
 	self.shaderFile.oitFillShaderFragment:gsub("###MSAA_LEVEL###", tostring(self.msaaLevel))
 	self.shaderFile.oitFillShaderFragment =
 	self.shaderFile.oitFillShaderFragment:gsub("###DO_OIT###", "1")
+	self.shaderFile.oitFillShaderFragment =
+	self.shaderFile.oitFillShaderFragment:gsub("###CLIP_CONTROL###", (Platform.glSupportClipSpaceControl and "1" or "0"))
+
+	self.shaderFile.blitShaderFragment =
+	self.shaderFile.blitShaderFragment:gsub("###MSAA_LEVEL###", tostring(self.msaaLevel))
+	self.shaderFile.blitShaderFragment =
+	self.shaderFile.blitShaderFragment:gsub("###DO_OIT###", "1")
 
 	local commonTexOpts = {
 		target = ((self.msaaLevel > 1) and GL_TEXTURE_2D_MULTISAMPLE) or GL_TEXTURE_2D,
@@ -285,6 +286,7 @@ function ShieldDrawer:BeginRenderPass()
 		--self.oitFillShader:Activate()
 	end)
 
+	-- can be replaced with "$model_gbuffer_zvaltex" and "$map_gbuffer_zvaltex"
 	gl.Texture(29, self.opaqueDepthTex)
 
 	self.oitFillShader:Activate()
@@ -436,8 +438,8 @@ function ShieldSphereColorHQParticle:Initialize()
 	local newEngine = Script.IsEngineMinVersion(104, 0, 1015) --TODO figure out commit number
 	local opt = {
 		betterPrecision = false,
-		msaaLevel = (newEngine and Spring.GetConfigInt("MSAALevel", 1)) or 1,
-		--msaaLevel = 0,
+		--msaaLevel = (newEngine and Spring.GetConfigInt("MSAALevel", 1)) or 1,
+		msaaLevel = 0,
 	}
 	shieldDrawer = shieldDrawer or ShieldDrawer(opt)
 	shieldDrawer:Initialize()

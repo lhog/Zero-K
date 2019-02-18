@@ -55,6 +55,8 @@ container.oitFillShaderFragment = [[
 	#version 150 compatibility
 	#line 20020
 
+	#define DEPTH_CLIP01 ###DEPTH_CLIP01###
+
 	#define MSAA_LEVEL ###MSAA_LEVEL###
 	#if (MSAA_LEVEL > 1)
 		uniform sampler2DMS depthTex;
@@ -67,7 +69,7 @@ container.oitFillShaderFragment = [[
 	#else
 		#define projMat gl_ProjectionMatrix
 	#endif
-	
+
 	//uniform mat4 inverseViewMat;
 
 	uniform vec2 depthRangeSpring;
@@ -87,9 +89,11 @@ container.oitFillShaderFragment = [[
 	#endif
 
 	float GetViewSpaceDepth(float depthNDC) {
-		float A = projMat[2][2];
-		float B = projMat[3][2];
-		return B / (A + depthNDC);
+		#define Ap  projMat[2][2]
+		#define Bp  projMat[3][2]
+		return -Bp / (Ap + depthNDC);
+		#undef Ap
+		#undef Bp
 	}
 
 	const vec2 depthRangeTarget = vec2(0.001, 2.5);
@@ -110,35 +114,32 @@ container.oitFillShaderFragment = [[
 			float opaqueDepth = texelFetch( depthTex, ivec2(gl_FragCoord.xy), 0 ).r;
 		#endif
 
+		#if (DEPTH_CLIP01 == 1)
+			// Nothing. NDC and window/texture space are same for depth
+		#else
+			float opaqueDepth = opaqueDepth * 2.0 - 1.0;
+		#endif
+
 		//color.r = abs(gl_FragCoord.z - opaqueDepth);
 		color.a = 1.0;
 		float d;
-		//d = smoothstep(texture(depthTex, uv).r, 0.95, 0.98);
-		//d = smoothstep(texelFetch(depthTex, ivec2(gl_FragCoord.xy), 0).r, 0.95, 0.98);
-		//d = smoothstep(texelFetch(depthTex, ivec2( uv * textureSize(depthTex, 0) ), 0).r, 0.95, 0.98);
-		//d = smoothstep(gl_FragCoord.z, 0.95, 0.98);
 
-		//d = 1.0 - smoothstep( abs(texture(depthTex, uv).r - gl_FragCoord.z), 0.1, 0.2 );
-
-		//d = GetViewSpaceDepth( opaqueDepth );
-		//d = -viewPos.z / 8000.0;
-		
+		// viewPos.z is negative
+		// depthOpaqueView is negative
 		float depthOpaqueView = GetViewSpaceDepth( opaqueDepth );
-		
-		//vec4 opaqueDepthWorldPos = inverseViewMat * vec4(viewPos.xy, -depthOpaqueView, viewPos.w);
-		
-		//vec4 invWorldPos = inverseViewMat * vec4(viewPos.xy, viewPos.z, viewPos.w); --same as worldPos!
-		
-		//d = 1.0 - smoothstep( worldPos.y - opaqueDepthWorldPos.y, 0.0, 8.0 );
-		//d = opaqueDepthWorldPos.y / 100.0;
-		//d = worldPos.y / 100.0;
-		//d = invWorldPos.y / 100.0;
-		//d = 1.0 - smoothstep( abs(worldPos.y - opaqueDepthWorldPos.y), 0.0, 8.0 );
-		
-		// abs((viewPos.z) - (-depthOpaqueView)) == abs(viewPos.z + depthOpaqueView)
-		
-		// Doing this in view space is probably wrong, but cheaper.
-		d = 1.0 - smoothstep( abs(viewPos.z + depthOpaqueView), 0.0, 2.0 );
+
+		const float effectSize = 4.0;
+
+		#if 1
+			// Same result as in world space below.
+			d = smoothstep( abs(viewPos.z - depthOpaqueView), 0.0, effectSize );
+		#else
+			vec4 opaqueDepthWorldPos = inverseViewMat * vec4(viewPos.xy, depthOpaqueView, viewPos.w);
+			d = smoothstep( distance(opaqueDepthWorldPos.xyz, worldPos.xyz), 0.0, effectSize );
+		#endif
+
+		d = 1.0 - d;
+		d = d * d;
 
 		color.rgb = vec3(d);
 
