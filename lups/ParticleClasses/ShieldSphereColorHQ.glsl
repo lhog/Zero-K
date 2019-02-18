@@ -86,8 +86,6 @@ container.oitFillShaderFragment = [[
 		}
 	#endif
 
-	#define ClipToNDC(clipVal) (2.0 * clipVal - 1.0)
-
 	float GetViewSpaceDepth(float depthNDC) {
 		float A = projMat[2][2];
 		float B = projMat[3][2];
@@ -105,8 +103,6 @@ container.oitFillShaderFragment = [[
 	void main() {
 
 		vec4 color = vec4(0.0, 0.0, 0.5, 0.2);
-
-		vec2 uv = gl_FragCoord.xy / vec2(2560.0, 1080.0);
 
 		#if (MSAA_LEVEL > 1)
 			float opaqueDepth = texelFetchMS( depthTex, ivec2(gl_FragCoord.xy) ).r;

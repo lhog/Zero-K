@@ -267,8 +267,8 @@ end
 function ShieldDrawer:BeginRenderPass()
 	--copy depth texture from default FBO
 	gl.BlitFBO(
-		nil, 			self.vpx, self.vpy, self.vsx, self.vsy, -- fboSrc , int x0Src,y0Src,x1Src,y1Src,
-		self.oitFBO, 	self.vpx, self.vpy, self.vsx, self.vsy, -- fboDst , int x0Dst,y0Dst,x1Dst,y1Dst
+		nil, 			self.vpx, self.vpy, self.vsx - self.vpx, self.vsy - self.vpy, -- fboSrc , int x0Src,y0Src,x1Src,y1Src,
+		self.oitFBO, 	self.vpx, self.vpy, self.vsx - self.vpx, self.vsy - self.vpy, -- fboDst , int x0Dst,y0Dst,x1Dst,y1Dst
 		GL.DEPTH_BUFFER_BIT, GL.NEAREST -- [, number mask = GL_COLOR_BUFFER_BIT [, number filter = GL_NEAREST ] ]
 	)
 
@@ -284,7 +284,7 @@ function ShieldDrawer:BeginRenderPass()
 		gl.BlendFuncSeparate(GL.ONE, GL.ONE, GL.ZERO, GL.ONE_MINUS_SRC_ALPHA)
 		--self.oitFillShader:Activate()
 	end)
-	
+
 	gl.Texture(29, self.opaqueDepthTex)
 
 	self.oitFillShader:Activate()
@@ -316,7 +316,7 @@ end
 local debug = true
 function ShieldDrawer:EndRenderPass()
 
-	gl.ActiveFBO(self.oitFBO, function()		
+	gl.ActiveFBO(self.oitFBO, function()
 		--from smaller shields to larger (kinda back to front in stacked shields environment)
 		for effectIndex = 0, self.maxEffectIndex do
 
@@ -350,12 +350,14 @@ function ShieldDrawer:EndRenderPass()
 
 				self.oitFBO.readbuffer = GL_COLOR_ATTACHMENT0_EXT
 				gl.ActiveFBO(self.oitFBO, function()
-					gl.SaveImage( 0, 0, self.vsx, self.vsy, string.format("texA_%s.png", select(1, Spring.GetGameFrame())), {alpha = true} )
+					gl.SaveImage( self.vpx, self.vpy, self.vsx, self.vsy, -- x, y, width, height
+					string.format("texA_%s.png", select(1, Spring.GetGameFrame())), {alpha = true} )
 				end)
 
 				self.oitFBO.readbuffer = GL_COLOR_ATTACHMENT1_EXT
 				gl.ActiveFBO(self.oitFBO, function()
-					gl.SaveImage( 0, 0, self.vsx, self.vsy, string.format("texB_%s.png", select(1, Spring.GetGameFrame())), {alpha = true} )
+					gl.SaveImage( self.vpx, self.vpy, self.vsx, self.vsy, -- x, y, width, height
+					string.format("texB_%s.png", select(1, Spring.GetGameFrame())), {alpha = true} )
 				end)
 
 			end)
@@ -388,8 +390,6 @@ end
 
 
 function ShieldDrawer:Finalize()
-	self.vsx, self.vsy = nil, nil
-
 	gl.DeleteTexture(self.opaqueDepthTex)
 	--gl.DeleteRBO(self.opaqueDepthRBO)
 	gl.DeleteTexture(self.texA)
