@@ -89,11 +89,7 @@ container.oitFillShaderFragment = [[
 	#endif
 
 	float GetViewSpaceDepth(float depthNDC) {
-		#define Ap  projMat[2][2]
-		#define Bp  projMat[3][2]
-		return -Bp / (Ap + depthNDC);
-		#undef Ap
-		#undef Bp
+		return -projMat[3][2] / (projMat[2][2] + depthNDC);
 	}
 
 	const vec2 depthRangeTarget = vec2(0.001, 2.5);

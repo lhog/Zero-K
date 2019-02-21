@@ -139,7 +139,7 @@ function ShieldDrawer:Initialize()
 	self.shaderFile.oitFillShaderFragment =
 	self.shaderFile.oitFillShaderFragment:gsub("###DO_OIT###", "1")
 	self.shaderFile.oitFillShaderFragment =
-	self.shaderFile.oitFillShaderFragment:gsub("###CLIP_CONTROL###", (Platform.glSupportClipSpaceControl and "1" or "0"))
+	self.shaderFile.oitFillShaderFragment:gsub("###DEPTH_CLIP01###", (Platform.glSupportClipSpaceControl and "1" or "0"))
 
 	self.shaderFile.blitShaderFragment =
 	self.shaderFile.blitShaderFragment:gsub("###MSAA_LEVEL###", tostring(self.msaaLevel))
