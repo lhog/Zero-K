@@ -164,20 +164,63 @@ local function RemoveUnit(unitID)
 	end
 end
 
-local PI = math.pi
-
-local function cart2spherical(dx, dy, dz)
-	local r = math.sqrt(dx*dx + dy*dy + dz*dz)
-	local theta = math.acos(dz / r)
-	local phi = math.atan2(dy, dx)
-	return r, theta, phi
+local function Norm(x, y, z)
+	return math.sqrt( x*x + y*y + z*z)
 end
 
-local function spherical2cart(r, theta, phi)
-	local dx = r * math.sin(theta) * math.cos(phi)
-	local dy = r * math.sin(theta) * math.sin(phi)
-	local dz = r * math.cos(theta)
-	return dx, dy, dz
+local function Normalize(x, y, z)
+	local N = Norm(x, y, z)
+	return x/N, y/N, z/N
+end
+
+-- presumes normalized vectors
+local function DotProduct(x1, y1, z1, x2, y2, z2)
+	return x1*x2 + y1*y2 + z1*z2
+end
+
+-- presumes normalized vectors
+local function CrossProduct(x1, y1, z1, x2, y2, z2)
+	return
+		-y2*z1 + y1*z2,
+		 x2*z1 - x1*z2,
+		-x2*y1 + x1*y2
+end
+
+-- presumes normalized vectors
+local function AngleBetweenVectors(x1, y1, z1, x2, y2, z2)
+	return math.acos(DotProduct(x1, y1, z1, x2, y2, z2))
+end
+
+-- presumes normalized vectors
+local function GetSLerpedPoint(x1, y1, z1, x2, y2, z2, w1, w2)
+	-- Below check is not really required for the sane AOE_SAME_SPOT value (less than PI)
+	local EPS = 1E-3
+	local dotP
+	repeat
+		dotP = DotProduct(x1, y1, z1, x2, y2, z2)
+		--check if {x1, y1, z1} and {x2, y2, z2} are not collinear
+		local ok = math.abs( math.abs(dotP) - 1) >= EPS
+		if not ok then -- absolutely or almost collinear. Need to do something.
+			Spring.Echo("Error in GetSLerpedPoint. This should never happen!!!")
+			x1 = x1 + (math.random() * 2 - 1) * EPS
+			y1 = y1 + (math.random() * 2 - 1) * EPS
+			z1 = z1 + (math.random() * 2 - 1) * EPS
+			x1, y1, z1 = Normalize(x, y, z)
+		end
+	until ok
+
+	-- Do spherical linear interpolation
+	local A = math.acos(dotP)
+	local sinA = math.sin(A)
+
+	local w = 1.0 - (w1 / (w1 + w2)) --the more is relative weight the less this value should be
+
+	local x = (math.sin((1.0 - w) * A) * x1 + math.sin(w * A) * x2) / sinA
+	local y = (math.sin((1.0 - w) * A) * y1 + math.sin(w * A) * y2) / sinA
+	local z = (math.sin((1.0 - w) * A) * z1 + math.sin(w * A) * z2) / sinA
+
+	-- everything was normalized, no need to normalize again
+	return x, y, z
 end
 
 local AOE_MIN = 0.04
@@ -200,28 +243,28 @@ end
 
 local AOE_SAME_SPOT = (AOE_MIN + AOE_MAX) / 2
 
-local function DoAddShieldHitData(unitData, hitFrame, dmg, theta, phi)
+local function DoAddShieldHitData(unitData, hitFrame, dmg, x, y, z)
 	local hitData = unitData.hitData
 	local found = false
 	--Spring.Echo(unitData.unitID, "#hitData", #hitData)
 	--GG.TableEcho(hitData)
 	for _, hitInfo in ipairs(hitData) do
 		if hitInfo then
-			local dist = math.sqrt( ((hitInfo.theta - theta)/PI)^2 + ((hitInfo.phi - phi)/PI)^2  )
-			--Spring.Echo("dist", dist, AOE_SAME_SPOT)
+
+			-- Great Circle Distance in radians
+			local dist = AngleBetweenVectors(hitInfo.x, hitInfo.y, hitInfo.z, x, y, z)
+
 			if dist <= AOE_SAME_SPOT then
 				found = true
-				hitInfo.theta = (theta * dmg + hitInfo.theta * hitInfo.dmg)/(dmg + hitInfo.dmg)
-				hitInfo.phi = (phi * dmg + hitInfo.phi * hitInfo.dmg)/(dmg + hitInfo.dmg)
+
+				--this vector is very likely normalized :)
+				hitInfo.x, hitInfo.y, hitInfo.z = GetSLerpedPoint(x, y, z, hitInfo.x, hitInfo.y, hitInfo.z, dmg, hitInfo.dmg)
+
 				hitInfo.dmg = dmg + hitInfo.dmg
 
 				--Spring.Echo("AOE_SAME_SPOT", unitData.unitID, hitInfo.dmg)
 
-				local mag, aoe = GetMagAoE(hitInfo.dmg, unitData.capacity)
-				hitInfo.mag, hitInfo.aoe = mag, aoe
-
-				local dx, dy, dz = spherical2cart(unitData.radius, hitInfo.theta, hitInfo.phi)
-				hitInfo.dx, hitInfo.dy, hitInfo.dz = dx, dy, dz
+				hitInfo.mag, hitInfo.aoe = GetMagAoE(hitInfo.dmg, unitData.capacity)
 				--break
 			end
 		end
@@ -230,17 +273,14 @@ local function DoAddShieldHitData(unitData, hitFrame, dmg, theta, phi)
 	if not found then
 		local mag, aoe = GetMagAoE(dmg, unitData.capacity)
 		--Spring.Echo("DoAddShieldHitData", dmg, aoe, mag)
-		local dx, dy, dz = spherical2cart(unitData.radius, theta, phi)
 		table.insert(hitData, {
 			hitFrame = hitFrame,
 			dmg = dmg,
-			theta = theta,
-			phi = phi,
 			mag = mag,
 			aoe = aoe,
-			dx = dx,
-			dy = dy,
-			dz = dz,
+			x = x,
+			y = y,
+			z = z,
 		})
 	end
 	hitUpdateNeeded = true
@@ -295,8 +335,7 @@ local function AddShieldHitData(_, hitFrame, unitID, dmg, dx, dy, dz)
 	if unitData and unitData.hitData then
 		--Spring.Echo(hitFrame, unitID, dmg)
 		local rdx, rdy, rdz = dx - unitData.shieldPos[1], dy - unitData.shieldPos[2], dz - unitData.shieldPos[3]
-		local _, theta, phi = cart2spherical(rdx, rdy, rdz)
-		DoAddShieldHitData(unitData, hitFrame, dmg, theta, phi)
+		DoAddShieldHitData(unitData, hitFrame, dmg, rdx, rdy, rdz)
 	end
 end
 

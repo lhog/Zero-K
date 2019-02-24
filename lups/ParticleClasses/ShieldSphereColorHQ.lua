@@ -317,7 +317,6 @@ end
 
 local debug = true
 function ShieldDrawer:EndRenderPass()
-
 	gl.ActiveFBO(self.oitFBO, function()
 		--from smaller shields to larger (kinda back to front in stacked shields environment)
 		for effectIndex = 0, self.maxEffectIndex do
