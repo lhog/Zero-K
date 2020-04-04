@@ -43,6 +43,8 @@ vertex = [[
 	uniform int simFrame;
 	uniform int drawFrame;
 
+	uniform vec4 shadowParams;
+
 	uniform float floatOptions[2];
 	uniform int bitOptions;
 
@@ -147,7 +149,8 @@ vertex = [[
 
 			if (BITMASK_FIELD(bitOptions, OPTION_SHADOWMAPPING)) {
 				shadowVertexPos = shadowMatrix * worldVertexPos;
-				shadowVertexPos.xy += vec2(0.5);  //no need for shadowParams anymore
+				shadowVertexPos.xy *= (inversesqrt(abs(shadowVertexPos.xy) + shadowParams.zz) + shadowParams.ww);
+				shadowVertexPos.xy += shadowParams.xy;
 			}
 
 			if (BITMASK_FIELD(bitOptions, OPTION_NORMALMAPPING) || BITMASK_FIELD(bitOptions, OPTION_AUTONORMAL)) {
@@ -207,20 +210,22 @@ vertex = [[
 				fogFactor = clamp(fogFactor, 0.0, 1.0);
 			}
 		#else //shadow pass
-			vec4 lightVertexPos = gl_ModelViewMatrix * modelVertexPos;
-			vec3 lightVertexNormal = normalize(gl_NormalMatrix * modelVertexNormal);
+			vec4 shadowVertexPos = gl_ModelViewMatrix * modelVertexPos;
+			vec3 shadowVertexNormal = normalize(gl_NormalMatrix * modelVertexNormal);
 
-			float NdotL = clamp(dot(lightVertexNormal, vec3(0.0, 0.0, 1.0)), 0.0, 1.0);
+			float NdotL = clamp(dot(shadowVertexNormal, vec3(0.0, 0.0, 1.0)), 0.0, 1.0);
 
 			//use old bias formula from GetShadowPCFRandom(), but this time to write down shadow depth map values
 			const float cb = 5e-5;
 			float bias = cb * tan(acos(NdotL));
 			bias = clamp(bias, 0.0, 5.0 * cb);
 
-			lightVertexPos.xy += vec2(0.5);
-			lightVertexPos.z += bias;
+			shadowVertexPos.xy *= (inversesqrt(abs(shadowVertexPos.xy) + shadowParams.zz) + shadowParams.ww);
+			shadowVertexPos.xy += shadowParams.xy;
 
-			gl_Position = gl_ProjectionMatrix * lightVertexPos;
+			shadowVertexPos.z += bias;
+
+			gl_Position = gl_ProjectionMatrix * shadowVertexPos;
 		#endif
 	}
 ]],
